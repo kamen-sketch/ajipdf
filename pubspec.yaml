@@ -1,0 +1,129 @@
+name: pdf_enterprise_suite
+description: PDF Enterprise Suite - All-in-one PDF application for iOS, Android, and Web
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+  
+  # Navigation
+  go_router: ^13.0.1
+  
+  # Local Storage
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.0.0
+  
+  # PDF Processing
+  pdfx: ^2.6.0
+  syncfusion_flutter_pdf: ^24.1.41
+  syncfusion_flutter_pdfviewer: ^24.1.41
+  
+  # Image Processing
+  image: ^4.1.7
+  
+  # OCR
+  google_mlkit_text_recognition: ^0.11.0
+  
+  # HTTP & Network
+  dio: ^5.4.0
+  connectivity_plus: ^5.0.2
+  pretty_dio_logger: ^1.3.1
+  
+  # Firebase
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.16.0
+  cloud_firestore: ^4.14.0
+  firebase_storage: ^11.6.0
+  firebase_analytics: ^10.8.0
+  firebase_crashlytics: ^3.4.9
+  firebase_messaging: ^14.2.5
+  
+  # OAuth
+  google_sign_in: ^6.2.1
+  sign_in_with_apple: ^5.0.0
+  
+  # In-App Purchase
+  purchases_flutter: ^6.26.0
+  
+  # Cloud Storage APIs
+  googleapis: ^12.0.0
+  googleapis_auth: ^1.4.1
+  
+  # Share & Export
+  share_plus: ^7.2.1
+  file_picker: ^6.1.1
+  path_provider: ^2.1.2
+  
+  # Permissions
+  permission_handler: ^11.3.0
+  
+  # UI Components
+  flutter_animate: ^4.3.0
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.1
+  
+  # Utilities
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+  uuid: ^4.3.1
+  intl: ^0.19.0
+  url_launcher: ^6.2.3
+  flutter_dotenv: ^5.1.0
+  package_info_plus: ^5.0.1
+  device_info_plus: ^9.1.1
+  
+  # Icons
+  cupertino_icons: ^1.0.6
+
+  # Web support
+  web: ^0.4.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  # Linting
+  flutter_lints: ^3.0.1
+  
+  # Code Generation
+  build_runner: ^2.4.8
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+  riverpod_generator: ^2.3.9
+  hive_generator: ^2.0.1
+  
+  # Testing
+  mocktail: ^1.0.2
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - .env
+    - .env.dev
+    - .env.prod
+    - assets/images/
+    - assets/icons/
+  
+  # NOTE: Poppins fonts dinonaktifkan sementara karena file font belum tersedia.
+  # Tambahkan file font ke assets/fonts/ lalu aktifkan kembali bagian ini.
+  # fonts:
+  #   - family: Poppins
+  #     fonts:
+  #       - asset: assets/fonts/Poppins-Regular.ttf
+  #       - asset: assets/fonts/Poppins-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Poppins-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Poppins-Bold.ttf
+  #         weight: 700
