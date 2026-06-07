@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/subscription_provider.dart';
 import '../../../../core/providers/document_provider.dart';
+import '../../../../core/providers/theme_provider.dart';
 import '../widgets/quick_action_card.dart';
 import '../widgets/recent_document_card.dart';
 
@@ -47,10 +49,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
       floatingActionButton: _selectedIndex == 0 || _selectedIndex == 1
-          ? FloatingActionButton.extended(
+          ? FloatingActionButton(
               onPressed: () => _showAddOptions(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Add PDF'),
+              child: const Icon(Icons.add),
             )
           : null,
       bottomNavigationBar: NavigationBar(
@@ -179,9 +180,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const Spacer(),
           ListTile(
-            leading: Icon(Icons.logout, color: AppTheme.errorColor),
-            title:
-                Text('Sign Out', style: TextStyle(color: AppTheme.errorColor)),
+            leading: const Icon(Icons.logout, color: AppTheme.errorColor),
+            title: const Text('Sign Out',
+                style: TextStyle(color: AppTheme.errorColor)),
             onTap: () async {
               Navigator.pop(context);
               await ref.read(authStateProvider.notifier).logout();
@@ -202,18 +203,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.add_circle_outline,
+                        color: AppTheme.primaryColor),
+                    SizedBox(width: 8),
+                    Text('Tambah Dokumen',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
               ListTile(
-                leading: const Icon(Icons.folder_outlined),
-                title: const Text('Open from Device'),
-                subtitle: const Text('Pilih file PDF dari perangkat'),
+                leading: const Icon(Icons.folder_outlined,
+                    color: AppTheme.primaryColor),
+                title: const Text('Buka dari Perangkat'),
+                subtitle: const Text('Pilih file PDF yang sudah ada'),
                 onTap: () async {
                   Navigator.pop(context);
                   await _openFromDevice();
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.cloud_download_outlined),
-                title: const Text('Open from Cloud'),
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: AppTheme.successColor),
+                title: const Text('Scan to PDF'),
+                subtitle: const Text('Foto dokumen dan konversi ke PDF'),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/scan');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.cloud_download_outlined,
+                    color: AppTheme.infoColor),
+                title: const Text('Buka dari Cloud'),
+                subtitle: const Text('Google Drive, iCloud'),
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -222,17 +250,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   );
                 },
               ),
-              ListTile(
-                leading: Icon(Icons.camera_alt_outlined,
-                    color: AppTheme.primaryColor),
-                title: const Text('Scan Document'),
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Scanner segera hadir.')),
-                  );
-                },
-              ),
+              const SizedBox(height: 8),
             ],
           ),
         );
@@ -258,8 +276,9 @@ class _HomeTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final sub = ref.watch(subscriptionProvider);
+    final wallpaper = ref.watch(dashboardWallpaperProvider);
 
-    return SingleChildScrollView(
+    Widget content = SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,7 +329,7 @@ class _HomeTab extends ConsumerWidget {
                 icon: Icons.draw_outlined,
                 label: 'Sign PDF',
                 color: AppTheme.successColor,
-                onTap: () => context.push('/editor?operation=sign'),
+                onTap: () => context.push('/signature'),
               ),
               QuickActionCard(
                 icon: Icons.compress_outlined,
@@ -331,6 +350,24 @@ class _HomeTab extends ConsumerWidget {
                 onTap: () => context.push('/editor?operation=watermark'),
               ),
               QuickActionCard(
+                icon: Icons.sticky_note_2_outlined,
+                label: 'Annotate',
+                color: const Color(0xFF6366F1),
+                onTap: () => context.push('/annotations'),
+              ),
+              QuickActionCard(
+                icon: Icons.document_scanner,
+                label: 'OCR',
+                color: const Color(0xFF0891B2),
+                onTap: () => context.push('/ocr'),
+              ),
+              QuickActionCard(
+                icon: Icons.rotate_90_degrees_ccw_outlined,
+                label: 'Rotate/Reorder',
+                color: const Color(0xFF7C3AED),
+                onTap: () => context.push('/rotate-reorder'),
+              ),
+              QuickActionCard(
                 icon: Icons.workspace_premium_outlined,
                 label: sub.isPro ? 'Pro Active' : 'Go Pro',
                 color: Colors.amber.shade700,
@@ -347,6 +384,22 @@ class _HomeTab extends ConsumerWidget {
         ],
       ),
     );
+
+    // Wrap with wallpaper background if set (hanya native, bukan web).
+    if (wallpaper != null && !kIsWeb) {
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.15,
+              child: Image.memory(wallpaper, fit: BoxFit.cover),
+            ),
+          ),
+          content,
+        ],
+      );
+    }
+    return content;
   }
 
   Future<void> _openViewer(BuildContext context, WidgetRef ref) async {
@@ -463,31 +516,138 @@ class _CloudTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.cloud_outlined, size: 72, color: AppTheme.textHint),
-          const SizedBox(height: 16),
-          Text('Cloud Sync', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              'Hubungkan Google Drive atau iCloud untuk sinkronisasi dokumen. Fitur ini sedang disiapkan.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
-            ),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const SizedBox(height: 16),
+        // Cloud providers
+        Text('Cloud Providers',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        _buildCloudProviderCard(
+          context,
+          icon: Icons.drive_file_rename_outline,
+          name: 'Google Drive',
+          description: 'Connect your Google Drive account',
+          color: const Color(0xFF4285F4),
+          onConnect: () => _showConnectInfo(context, 'Google Drive'),
+        ),
+        const SizedBox(height: 8),
+        _buildCloudProviderCard(
+          context,
+          icon: Icons.cloud,
+          name: 'iCloud',
+          description: 'Connect your iCloud account (iOS only)',
+          color: const Color(0xFF007AFF),
+          onConnect: () => _showConnectInfo(context, 'iCloud'),
+        ),
+        const SizedBox(height: 24),
+        Text('Sync Settings',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.sync, color: AppTheme.primaryColor),
+                title: const Text('Manual Sync'),
+                subtitle: const Text('Sync all documents now'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text('Cloud sync requires provider connection.')),
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('Sync Settings'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pushNamed(context, '/settings'),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.infoColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline, color: AppTheme.infoColor),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Cloud sync will be fully available once you connect a provider. OAuth credentials need to be configured.',
+                  style: TextStyle(color: AppTheme.infoColor, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCloudProviderCard(
+    BuildContext context, {
+    required IconData icon,
+    required String name,
+    required String description,
+    required Color color,
+    required VoidCallback onConnect,
+  }) {
+    return Card(
+      child: ListTile(
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w500)),
+        subtitle: Text(description, style: const TextStyle(fontSize: 12)),
+        trailing: OutlinedButton(
+          onPressed: onConnect,
+          child: const Text('Connect'),
+        ),
+      ),
+    );
+  }
+
+  void _showConnectInfo(BuildContext context, String provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Connect $provider'),
+        content: Text(
+          '$provider integration requires configuring OAuth credentials. '
+          'Go to Settings to connect your $provider account.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Integrasi cloud segera hadir.')),
-              );
+              Navigator.pop(ctx);
+              Navigator.pushNamed(context, '/settings');
             },
-            icon: const Icon(Icons.add_link),
-            label: const Text('Connect Cloud'),
+            child: const Text('Settings'),
           ),
         ],
       ),
@@ -515,7 +675,8 @@ class _ProfileTab extends ConsumerWidget {
             backgroundColor: AppTheme.primaryColor,
             child: Text(
               auth.displayName?.substring(0, 1).toUpperCase() ?? 'U',
-              style: theme.textTheme.displaySmall?.copyWith(color: Colors.white),
+              style:
+                  theme.textTheme.displaySmall?.copyWith(color: Colors.white),
             ),
           ),
         ),
@@ -564,8 +725,8 @@ class _ProfileTab extends ConsumerWidget {
               ),
               const Divider(height: 1),
               ListTile(
-                leading: Icon(Icons.logout, color: AppTheme.errorColor),
-                title: Text('Sign Out',
+                leading: const Icon(Icons.logout, color: AppTheme.errorColor),
+                title: const Text('Sign Out',
                     style: TextStyle(color: AppTheme.errorColor)),
                 onTap: () async {
                   await ref.read(authStateProvider.notifier).logout();

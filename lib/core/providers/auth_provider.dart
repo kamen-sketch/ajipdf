@@ -9,7 +9,7 @@ class AuthState {
   final String? displayName;
   final bool isLoading;
   final String? error;
-  
+
   const AuthState({
     this.userId,
     this.email,
@@ -17,9 +17,9 @@ class AuthState {
     this.isLoading = false,
     this.error,
   });
-  
+
   bool get isAuthenticated => userId != null;
-  
+
   AuthState copyWith({
     String? userId,
     String? email,
@@ -42,24 +42,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(const AuthState()) {
     _initAuth();
   }
-  
+
   final _controller = StreamController<AuthState>.broadcast();
+  @override
   Stream<AuthState> get stream => _controller.stream;
-  
+
   void _initAuth() {
     // Check for stored auth token on app start
     // This will be implemented with Firebase Auth
     state = const AuthState();
   }
-  
+
   /// Login with email and password
   Future<bool> loginWithEmailPassword(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
-    
+
     try {
       // TODO: Implement Firebase Auth login
       await Future.delayed(const Duration(seconds: 1)); // Simulated delay
-      
+
       // Simulated successful login
       state = AuthState(
         userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
@@ -67,7 +68,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         displayName: email.split('@').first,
         isLoading: false,
       );
-      
+
       _controller.add(state);
       return true;
     } catch (e) {
@@ -79,7 +80,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
-  
+
   /// Register with email and password
   Future<bool> registerWithEmailPassword(
     String email,
@@ -87,11 +88,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String displayName,
   ) async {
     state = state.copyWith(isLoading: true, error: null);
-    
+
     try {
       // TODO: Implement Firebase Auth registration
       await Future.delayed(const Duration(seconds: 1)); // Simulated delay
-      
+
       // Simulated successful registration
       state = AuthState(
         userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
@@ -99,7 +100,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         displayName: displayName,
         isLoading: false,
       );
-      
+
       _controller.add(state);
       return true;
     } catch (e) {
@@ -111,15 +112,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
-  
+
   /// Login with Google
   Future<bool> loginWithGoogle() async {
     state = state.copyWith(isLoading: true, error: null);
-    
+
     try {
       // TODO: Implement Google Sign In
       await Future.delayed(const Duration(seconds: 1)); // Simulated delay
-      
+
       // Simulated successful login
       state = AuthState(
         userId: 'google_user_${DateTime.now().millisecondsSinceEpoch}',
@@ -127,7 +128,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         displayName: 'Google User',
         isLoading: false,
       );
-      
+
       _controller.add(state);
       return true;
     } catch (e) {
@@ -139,15 +140,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
-  
+
   /// Login with Apple
   Future<bool> loginWithApple() async {
     state = state.copyWith(isLoading: true, error: null);
-    
+
     try {
       // TODO: Implement Apple Sign In
       await Future.delayed(const Duration(seconds: 1)); // Simulated delay
-      
+
       // Simulated successful login
       state = AuthState(
         userId: 'apple_user_${DateTime.now().millisecondsSinceEpoch}',
@@ -155,7 +156,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         displayName: 'Apple User',
         isLoading: false,
       );
-      
+
       _controller.add(state);
       return true;
     } catch (e) {
@@ -167,15 +168,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
-  
+
   /// Send password reset email
   Future<bool> sendPasswordResetEmail(String email) async {
     state = state.copyWith(isLoading: true, error: null);
-    
+
     try {
       // TODO: Implement Firebase password reset
       await Future.delayed(const Duration(seconds: 1)); // Simulated delay
-      
+
       state = state.copyWith(isLoading: false);
       _controller.add(state);
       return true;
@@ -188,15 +189,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
   }
-  
+
   /// Logout
   Future<void> logout() async {
     state = state.copyWith(isLoading: true);
-    
+
     try {
       // TODO: Implement Firebase Auth logout
-      await Future.delayed(const Duration(milliseconds: 500)); // Simulated delay
-      
+      await Future.delayed(
+          const Duration(milliseconds: 500)); // Simulated delay
+
       state = const AuthState();
       _controller.add(state);
     } catch (e) {
@@ -207,12 +209,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       _controller.add(state);
     }
   }
-  
+
   /// Clear error
   void clearError() {
     state = state.copyWith(error: null);
   }
-  
+
   @override
   void dispose() {
     _controller.close();

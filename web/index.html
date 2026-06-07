@@ -1,32 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="PDF Enterprise Suite">
 
-  <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="pdf_enterprise_suite">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>PDF Enterprise Suite</title>
@@ -41,14 +26,176 @@
       cMapPacked: true,
     }
   </script>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <!-- Tesseract.js v5 for OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script>
+    /**
+     * OCR all pages (or single page) of a PDF.
+     * Flow: PDF bytes → pdf.js render each page → canvas PNG → tesseract.js → text
+     *
+     * @param {string} pdfBase64 - Base64 encoded PDF bytes
+     * @param {string} lang - Tesseract language code (eng, ind, chi_sim, jpn, etc.)
+     * @param {number} pageNum - 0 = all pages, >0 = specific page
+     * @returns {Promise<string>} JSON: { success, pages: [{page, text, words}], totalPages, fullText }
+     *
+     * words[] contains position data for overlay: {text, bbox: {x0,y0,x1,y1}, confidence}
+     */
+    async function performOCR(pdfBase64, lang, pageNum) {
+      try {
+        const pdfData = atob(pdfBase64);
+        const pdfArray = new Uint8Array(pdfData.length);
+        for (let i = 0; i < pdfData.length; i++) {
+          pdfArray[i] = pdfData.charCodeAt(i);
+        }
+
+        const pdf = await pdfjsLib.getDocument({ data: pdfArray }).promise;
+        const totalPages = pdf.numPages;
+
+        const startPage = (pageNum && pageNum > 0) ? pageNum : 1;
+        const endPage = (pageNum && pageNum > 0) ? pageNum : totalPages;
+
+        const worker = await Tesseract.createWorker(lang || 'eng');
+        const pages = [];
+        let fullText = '';
+
+        for (let p = startPage; p <= endPage; p++) {
+          const page = await pdf.getPage(p);
+          const scale = 2.0; // 2x for ~144 DPI quality
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const imageDataUrl = canvas.toDataURL('image/png');
+          const { data } = await worker.recognize(imageDataUrl);
+
+          // Collect word-level data with bounding boxes for overlay
+          const words = data.words.map(w => ({
+            text: w.text,
+            bbox: w.bbox, // {x0, y0, x1, y1} in image coordinates
+            confidence: w.confidence
+          }));
+
+          pages.push({
+            page: p,
+            text: data.text,
+            confidence: data.confidence,
+            words: words,
+            imageWidth: viewport.width,
+            imageHeight: viewport.height
+          });
+
+          fullText += '--- Page ' + p + ' ---\n' + data.text + '\n\n';
+
+          // Progress event for Dart to listen
+          window.dispatchEvent(new CustomEvent('ocr_progress', {
+            detail: { current: p - startPage + 1, total: endPage - startPage + 1 }
+          }));
+        }
+
+        await worker.terminate();
+
+        return JSON.stringify({
+          success: true,
+          pages: pages,
+          totalPages: totalPages,
+          fullText: fullText.trim()
+        });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.toString() });
+      }
+    }
+  </script>
+
+  <script>
+    /**
+     * Render PDF pages to JPEG images (for compression / rasterization).
+     * @param {string} pdfBase64
+     * @param {number} scale - render scale (1.0 = 72dpi base). Lower = smaller.
+     * @param {number} quality - JPEG quality 0..1
+     * @returns {Promise<string>} JSON { success, pages:[{jpegBase64,width,height,ptWidth,ptHeight}] }
+     */
+    async function rasterizePdfPages(pdfBase64, scale, quality) {
+      try {
+        const pdfData = atob(pdfBase64);
+        const pdfArray = new Uint8Array(pdfData.length);
+        for (let i = 0; i < pdfData.length; i++) pdfArray[i] = pdfData.charCodeAt(i);
+
+        const pdf = await pdfjsLib.getDocument({ data: pdfArray }).promise;
+        const pages = [];
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          // points = size at scale 1.0 (72 dpi)
+          const baseViewport = page.getViewport({ scale: 1.0 });
+          const viewport = page.getViewport({ scale: scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d');
+          // white background so transparency does not turn black in JPEG
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          const jpegBase64 = dataUrl.split(',')[1];
+          pages.push({
+            jpegBase64: jpegBase64,
+            width: canvas.width,
+            height: canvas.height,
+            ptWidth: baseViewport.width,
+            ptHeight: baseViewport.height,
+          });
+          window.dispatchEvent(new CustomEvent('raster_progress', {
+            detail: { current: p, total: pdf.numPages }
+          }));
+        }
+        return JSON.stringify({ success: true, pages: pages });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.toString() });
+      }
+    }
+
+    /**
+     * Render a single PDF page to a PNG data URL (for previews).
+     * @returns {Promise<string>} JSON { success, pngBase64, width, height, ptWidth, ptHeight }
+     */
+    async function renderPdfPage(pdfBase64, pageNum, scale) {
+      try {
+        const pdfData = atob(pdfBase64);
+        const pdfArray = new Uint8Array(pdfData.length);
+        for (let i = 0; i < pdfData.length; i++) pdfArray[i] = pdfData.charCodeAt(i);
+
+        const pdf = await pdfjsLib.getDocument({ data: pdfArray }).promise;
+        const page = await pdf.getPage(pageNum);
+        const baseViewport = page.getViewport({ scale: 1.0 });
+        const viewport = page.getViewport({ scale: scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const dataUrl = canvas.toDataURL('image/png');
+        return JSON.stringify({
+          success: true,
+          pngBase64: dataUrl.split(',')[1],
+          width: canvas.width,
+          height: canvas.height,
+          ptWidth: baseViewport.width,
+          ptHeight: baseViewport.height,
+          totalPages: pdf.numPages,
+        });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.toString() });
+      }
+    }
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

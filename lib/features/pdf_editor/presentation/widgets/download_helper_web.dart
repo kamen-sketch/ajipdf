@@ -1,18 +1,16 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:js_interop';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 
-import 'package:web/web.dart' as web;
-
-/// Implementasi web: trigger download lewat anchor + data URL.
+/// Implementasi web: trigger download lewat anchor element.
 Future<bool> savePdfImpl(String fileName, Uint8List bytes) async {
   final base64Data = base64Encode(bytes);
   final href = 'data:application/pdf;base64,$base64Data';
-  final anchor = web.HTMLAnchorElement()
-    ..href = href
-    ..download = fileName
+  final anchor = html.AnchorElement(href: href)
+    ..setAttribute('download', fileName)
     ..style.display = 'none';
-  web.document.body!.appendChild(anchor);
+  html.document.body!.append(anchor);
   anchor.click();
   anchor.remove();
   return true;

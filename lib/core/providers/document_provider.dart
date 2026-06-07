@@ -1,24 +1,25 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 /// Model dokumen PDF yang sedang/baru dibuka.
 class PdfDocumentInfo {
+  final String id; // Unique identifier for this document
   final String name;
   final String? path;
   final Uint8List? bytes;
   final int size;
   final DateTime lastOpened;
 
-  const PdfDocumentInfo({
+  PdfDocumentInfo({
+    String? id,
     required this.name,
     this.path,
     this.bytes,
     required this.size,
     required this.lastOpened,
-  });
+  }) : id = id ?? const Uuid().v4();
 
   String get readableSize {
     if (size <= 0) return '-';
@@ -30,6 +31,29 @@ class PdfDocumentInfo {
       i++;
     }
     return '${s.toStringAsFixed(s < 10 && i > 0 ? 1 : 0)} ${units[i]}';
+  }
+
+  /// Copy with different id (for new instance)
+  PdfDocumentInfo copyWithNewId() {
+    return PdfDocumentInfo(
+      name: name,
+      path: path,
+      bytes: bytes,
+      size: size,
+      lastOpened: lastOpened,
+    );
+  }
+
+  /// Update bytes while keeping same id (for save operations)
+  PdfDocumentInfo withBytes(Uint8List newBytes) {
+    return PdfDocumentInfo(
+      id: id,
+      name: name,
+      path: path,
+      bytes: newBytes,
+      size: newBytes.length,
+      lastOpened: DateTime.now(),
+    );
   }
 }
 
@@ -89,13 +113,22 @@ class DocumentsNotifier extends StateNotifier<List<PdfDocumentInfo>> {
     return docs;
   }
 
-  /// Tambahkan ke daftar recent (paling baru di atas, max 20, tanpa duplikat nama).
+  /// Tambahkan ke daftar recent (paling baru di atas, max 20, tanpa duplikat id).
   void addRecent(PdfDocumentInfo doc) {
     final updated = [
       doc,
-      ...state.where((d) => d.name != doc.name),
+      // Hapus duplikat berdasarkan ID (bukan nama) agar bytes yang benar ikut tersimpan
+      ...state.where((d) => d.id != doc.id),
     ];
     state = updated.take(20).toList();
+  }
+
+  /// Update bytes dokumen yang sudah ada di recent list berdasarkan id.
+  void updateBytes(String id, Uint8List newBytes) {
+    state = state.map((d) {
+      if (d.id != id) return d;
+      return d.withBytes(newBytes);
+    }).toList();
   }
 
   void clear() => state = const [];

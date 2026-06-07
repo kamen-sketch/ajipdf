@@ -14,12 +14,14 @@ Future<bool> savePdfImpl(String fileName, Uint8List bytes) async {
 
     // Coba juga buka dialog "save as" jika didukung.
     try {
-      await FilePicker.platform.saveFile(
+      final savePath = await FilePicker.platform.saveFile(
         fileName: fileName,
-        bytes: bytes,
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
+      if (savePath != null) {
+        await File(savePath).writeAsBytes(bytes);
+      }
     } catch (_) {
       // abaikan jika tidak didukung, file sudah tersimpan di dokumen.
     }

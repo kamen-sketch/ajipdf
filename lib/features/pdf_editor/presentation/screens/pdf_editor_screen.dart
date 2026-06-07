@@ -7,7 +7,9 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../../../core/providers/document_provider.dart';
 import '../../../../core/providers/subscription_provider.dart';
+import '../../../../core/services/pdf_compress_service.dart';
 import '../widgets/editor_result.dart';
+import '../widgets/multi_result_dialog.dart';
 
 /// PDF Editor Screen - menangani operasi split, merge, compress, encrypt, watermark, dll.
 class PDFEditorScreen extends ConsumerStatefulWidget {
@@ -28,6 +30,7 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
 
   // Input untuk operasi tertentu
   final _passwordController = TextEditingController();
+  final _passwordConfirmController = TextEditingController();
   final _watermarkController = TextEditingController(text: 'CONFIDENTIAL');
   final _rangeStartController = TextEditingController(text: '1');
   final _rangeEndController = TextEditingController(text: '1');
@@ -35,12 +38,16 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
   List<PdfDocumentInfo> _mergeDocs = [];
   PdfDocumentInfo? _singleDoc;
   int _pageCount = 0;
+  CompressLevel _compressLevel = CompressLevel.medium;
+  bool _splitEachPage = false;
+  Color _watermarkColor = Colors.red;
 
   String get _op => widget.operation ?? 'view';
 
   @override
   void dispose() {
     _passwordController.dispose();
+    _passwordConfirmController.dispose();
     _watermarkController.dispose();
     _rangeStartController.dispose();
     _rangeEndController.dispose();
@@ -92,6 +99,28 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Redirect sign to dedicated signature screen
+    if (_op == 'sign') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.replace('/signature');
+      });
+      return Scaffold(
+        appBar: AppBar(title: const Text('Sign PDF')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Redirect rotate/reorder to dedicated screen
+    if (_op == 'rotate' || _op == 'reorder') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.replace('/rotate-reorder');
+      });
+      return Scaffold(
+        appBar: AppBar(title: const Text('Rotate & Reorder')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final sub = ref.watch(subscriptionProvider);
     final feature = _requiredFeature;
     final available = feature == null ||
@@ -122,10 +151,7 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
                 ),
               ),
             const SizedBox(height: 24),
-            if (!available)
-              _buildLockedNotice()
-            else
-              _buildOperationUI(),
+            if (!available) _buildLockedNotice() else _buildOperationUI(),
             if (_status != null) ...[
               const SizedBox(height: 16),
               Text(_status!, textAlign: TextAlign.center),
@@ -184,26 +210,57 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
           icon: const Icon(Icons.add),
           label: const Text('Pilih beberapa PDF (min. 2)'),
         ),
-        const SizedBox(height: 12),
-        ..._mergeDocs.asMap().entries.map((e) => Card(
+        if (_mergeDocs.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          const Text('Drag untuk ubah urutan:',
+              style: TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+        const SizedBox(height: 8),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _mergeDocs.length,
+          onReorder: (oldIndex, newIndex) {
+            setState(() {
+              if (newIndex > oldIndex) newIndex--;
+              final item = _mergeDocs.removeAt(oldIndex);
+              _mergeDocs.insert(newIndex, item);
+            });
+          },
+          itemBuilder: (context, index) {
+            final doc = _mergeDocs[index];
+            return Card(
+              key: ValueKey('merge_${index}_${doc.name}'),
               child: ListTile(
-                leading: CircleAvatar(child: Text('${e.key + 1}')),
-                title: Text(e.value.name, overflow: TextOverflow.ellipsis),
-                subtitle: Text(e.value.readableSize),
-                trailing: IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: _processing
-                      ? null
-                      : () => setState(() => _mergeDocs.removeAt(e.key)),
+                leading: CircleAvatar(child: Text('${index + 1}')),
+                title: Text(doc.name, overflow: TextOverflow.ellipsis),
+                subtitle: Text(doc.readableSize),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.drag_handle, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: _processing
+                          ? null
+                          : () => setState(() => _mergeDocs.removeAt(index)),
+                    ),
+                  ],
                 ),
               ),
-            )),
+            );
+          },
+        ),
         const SizedBox(height: 16),
         FilledButton.icon(
-          onPressed: (_mergeDocs.length >= 2 && !_processing) ? _runMerge : null,
+          onPressed:
+              (_mergeDocs.length >= 2 && !_processing) ? _runMerge : null,
           icon: _processing
               ? const SizedBox(
-                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.merge_type),
           label: const Text('Gabungkan PDF'),
         ),
@@ -221,36 +278,53 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
           const SizedBox(height: 16),
           Text('Total halaman: $_pageCount'),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _rangeStartController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Dari halaman',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _rangeEndController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Sampai halaman',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-            ],
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _splitEachPage,
+            title: const Text('Pisah setiap halaman jadi file terpisah'),
+            subtitle: const Text('Menghasilkan banyak PDF (1 halaman per file)',
+                style: TextStyle(fontSize: 12)),
+            onChanged:
+                _processing ? null : (v) => setState(() => _splitEachPage = v),
           ),
+          if (!_splitEachPage) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _rangeStartController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Dari halaman',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _rangeEndController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Sampai halaman',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _processing ? null : _runSplit,
-            icon: const Icon(Icons.call_split),
-            label: const Text('Split PDF'),
+            icon: _processing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.call_split),
+            label: Text(_splitEachPage ? 'Pisah Semua Halaman' : 'Split PDF'),
           ),
         ],
       ],
@@ -265,7 +339,7 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
         _buildFilePickerTile(),
         if (_singleDoc != null) ...[
           const SizedBox(height: 16),
-          if (_op == 'encrypt')
+          if (_op == 'encrypt') ...[
             TextField(
               controller: _passwordController,
               obscureText: true,
@@ -275,21 +349,108 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
                 prefixIcon: Icon(Icons.lock),
               ),
             ),
-          if (_op == 'watermark')
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passwordConfirmController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Konfirmasi Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock),
+              ),
+            ),
+          ],
+          if (_op == 'watermark') ...[
             TextField(
               controller: _watermarkController,
               decoration: const InputDecoration(
-                labelText: 'Teks watermark',
+                labelText: 'Teks watermark (max 100 karakter)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.branding_watermark),
               ),
             ),
+            const SizedBox(height: 12),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Warna watermark:',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                Colors.red,
+                Colors.blue,
+                Colors.grey,
+                Colors.black,
+                Colors.green,
+                Colors.orange,
+                Colors.purple,
+              ]
+                  .map((c) => GestureDetector(
+                        onTap: _processing
+                            ? null
+                            : () => setState(() => _watermarkColor = c),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _watermarkColor == c
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              width: 3,
+                            ),
+                            boxShadow: _watermarkColor == c
+                                ? [
+                                    BoxShadow(
+                                        color: c.withValues(alpha: 0.5),
+                                        blurRadius: 6)
+                                  ]
+                                : null,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ],
+          if (_op == 'compress') ...[
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Tingkat kompresi:',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 8),
+            ...CompressLevel.values.map(
+              (lvl) => RadioListTile<CompressLevel>(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: lvl,
+                groupValue: _compressLevel,
+                title: Text(lvl.label),
+                onChanged: _processing
+                    ? null
+                    : (v) => setState(() => _compressLevel = v!),
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Kompresi maksimal mengubah halaman menjadi gambar — '
+              'cocok untuk dokumen hasil scan.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _processing ? null : _runSingleOp,
             icon: _processing
                 ? const SizedBox(
-                    width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : Icon(_icon),
             label: Text(_title),
           ),
@@ -325,6 +486,10 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
       _singleDoc = doc;
       _pageCount = pages;
       _rangeEndController.text = '$pages';
+      // Clear input fields for new document
+      _passwordController.clear();
+      _passwordConfirmController.clear();
+      _watermarkController.text = 'CONFIDENTIAL';
       _status = null;
     });
   }
@@ -351,28 +516,45 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
       _status = null;
     });
     try {
-      final merged = PdfDocument();
-      // Hapus halaman kosong default yang dibuat otomatis jika ada.
-      if (merged.pages.count > 0) {
-        merged.pages.removeAt(0);
+      if (_mergeDocs.length < 2) {
+        throw 'Minimal 2 dokumen diperlukan untuk merge';
       }
 
-      for (final d in _mergeDocs) {
-        final bytes = await _bytesOf(d);
+      // Validasi semua docs punya bytes
+      for (int i = 0; i < _mergeDocs.length; i++) {
+        final bytes = await _bytesOf(_mergeDocs[i]);
+        if (bytes == null || bytes.isEmpty) {
+          throw 'File "${_mergeDocs[i].name}" tidak memiliki data. Pilih ulang file.';
+        }
+      }
+
+      // Pendekatan robust: gunakan dokumen pertama sebagai base,
+      // lalu append halaman dari dokumen lainnya
+      final firstBytes = await _bytesOf(_mergeDocs[0]);
+      final merged = PdfDocument(inputBytes: firstBytes!);
+
+      for (int d = 1; d < _mergeDocs.length; d++) {
+        final bytes = await _bytesOf(_mergeDocs[d]);
         if (bytes == null) continue;
         final src = PdfDocument(inputBytes: bytes);
+
         for (int i = 0; i < src.pages.count; i++) {
           final srcPage = src.pages[i];
-          final template = srcPage.createTemplate();
-          final newPage = merged.pages.insert(
-            merged.pages.count,
-            srcPage.size,
-          );
-          newPage.graphics.drawPdfTemplate(
-            template,
-            const Offset(0, 0),
-            newPage.size,
-          );
+          // Buat halaman baru dengan ukuran source page
+          final newPage = merged.pages.insert(merged.pages.count, srcPage.size);
+
+          // Copy content via template
+          try {
+            final template = srcPage.createTemplate();
+            newPage.graphics.drawPdfTemplate(
+              template,
+              const Offset(0, 0),
+              srcPage.size,
+            );
+          } catch (_) {
+            debugPrint(
+                '[Merge] Warning: gagal copy page ${i + 1} dari ${_mergeDocs[d].name}');
+          }
         }
         src.dispose();
       }
@@ -381,7 +563,8 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
       merged.dispose();
       _recordUsage();
       _showResult('merged.pdf', out);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[Merge] Error: $e\n$st');
       setState(() => _status = 'Gagal merge: $e');
     } finally {
       if (mounted) setState(() => _processing = false);
@@ -394,45 +577,89 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
       _status = null;
     });
     try {
+      if (_pageCount <= 0) {
+        throw 'PDF tidak memiliki halaman atau belum dimuat';
+      }
+
       final bytes = await _bytesOf(_singleDoc!);
       if (bytes == null) throw 'File tidak punya data';
+
+      final baseName = _singleDoc!.name
+          .replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '');
+
+      if (_splitEachPage) {
+        // Hasilkan satu file PDF per halaman.
+        final files = <ResultFile>[];
+        for (int i = 0; i < _pageCount; i++) {
+          final pageBytes = await _extractPages(bytes, i, i);
+          files.add(ResultFile(
+            fileName: '${baseName}_page_${i + 1}.pdf',
+            bytes: pageBytes,
+          ));
+        }
+        _recordUsage();
+        setState(() => _status = 'Berhasil dipecah jadi ${files.length} file');
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => MultiResultDialog(files: files),
+          );
+        }
+        return;
+      }
+
       final start = int.tryParse(_rangeStartController.text) ?? 1;
       final end = int.tryParse(_rangeEndController.text) ?? start;
-      if (start < 1 || end > _pageCount || start > end) {
-        throw 'Range halaman tidak valid (1-$_pageCount)';
+
+      if (start < 1) throw 'Halaman awal harus >= 1';
+      if (end > _pageCount) {
+        throw 'Halaman akhir melebihi total halaman ($_pageCount)';
+      }
+      if (start > end) {
+        throw 'Halaman awal tidak boleh lebih besar dari halaman akhir';
       }
 
-      final src = PdfDocument(inputBytes: bytes);
-      final out = PdfDocument();
-      // Hapus halaman kosong default jika ada.
-      if (out.pages.count > 0) {
-        out.pages.removeAt(0);
-      }
-
-      for (int i = start - 1; i <= end - 1; i++) {
-        final srcPage = src.pages[i];
-        final template = srcPage.createTemplate();
-        final newPage = out.pages.insert(
-          out.pages.count,
-          srcPage.size,
-        );
-        newPage.graphics.drawPdfTemplate(
-          template,
-          const Offset(0, 0),
-          newPage.size,
-        );
-      }
-
-      final result = Uint8List.fromList(await out.save());
-      src.dispose();
-      out.dispose();
+      // Bangun dokumen baru hanya berisi halaman [start..end] dengan
+      // mengimpor halaman via template (andal di web, tidak sekadar hide).
+      final result = _extractPages(bytes, start - 1, end - 1);
       _recordUsage();
-      _showResult('split_${start}_$end.pdf', result);
-    } catch (e) {
+      _showResult('${baseName}_${start}_$end.pdf', await result);
+    } catch (e, st) {
+      debugPrint('Split error: $e\n$st');
       setState(() => _status = 'Gagal split: $e');
     } finally {
       if (mounted) setState(() => _processing = false);
     }
+  }
+
+  /// Ekstrak halaman [startIndex..endIndex] (0-based, inklusif) menjadi PDF baru.
+  /// Bangun dokumen kosong baru, copy tiap halaman via template → ukuran file
+  /// hanya mengandung resource yang benar-benar dipakai halaman tersebut.
+  Future<Uint8List> _extractPages(
+      Uint8List source, int startIndex, int endIndex) async {
+    final src = PdfDocument(inputBytes: source);
+    final out = PdfDocument();
+    // PdfDocument() punya 1 halaman default — hapus.
+    out.pageSettings.margins.all = 0;
+    // Hapus halaman default
+    while (out.pages.count > 0) {
+      out.pages.removeAt(0);
+    }
+
+    for (int i = startIndex; i <= endIndex && i < src.pages.count; i++) {
+      final srcPage = src.pages[i];
+      final template = srcPage.createTemplate();
+      // Tambah halaman baru dengan ukuran sama
+      out.pageSettings.size = srcPage.size;
+      final newPage = out.pages.add();
+      newPage.graphics
+          .drawPdfTemplate(template, const Offset(0, 0), srcPage.size);
+    }
+
+    final bytes = Uint8List.fromList(await out.save());
+    src.dispose();
+    out.dispose();
+    return bytes;
   }
 
   Future<void> _runSingleOp() async {
@@ -443,28 +670,70 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
     try {
       final bytes = await _bytesOf(_singleDoc!);
       if (bytes == null) throw 'File tidak punya data';
-      final pdf = PdfDocument(inputBytes: bytes);
 
+      // Compress ditangani terpisah karena memakai rasterisasi async.
+      if (_op == 'compress') {
+        setState(() => _status = 'Mengompres… (merender halaman)');
+        final result = await PdfCompressService.compress(
+          bytes,
+          level: _compressLevel,
+        );
+        final outName = 'compressed_${_singleDoc!.name}';
+        if (result.compressedSize >= result.originalSize) {
+          setState(() => _status =
+              'PDF sudah optimal — tidak ada pengurangan ukuran berarti.');
+        } else {
+          setState(() => _status =
+              'Berhasil! ${(result.originalSize / 1024).toStringAsFixed(0)} KB → '
+                  '${(result.compressedSize / 1024).toStringAsFixed(0)} KB '
+                  '(hemat ${result.savedPercent})');
+        }
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (_) =>
+                EditorResultDialog(fileName: outName, bytes: result.bytes),
+          );
+        }
+        return;
+      }
+
+      final pdf = PdfDocument(inputBytes: bytes);
       String outName = _singleDoc!.name;
 
       switch (_op) {
         case 'encrypt':
           final pw = _passwordController.text;
+          final pwConfirm = _passwordConfirmController.text;
+
+          if (pw.isEmpty || pwConfirm.isEmpty) {
+            throw 'Password dan konfirmasi tidak boleh kosong';
+          }
+          if (pw != pwConfirm) {
+            throw 'Password tidak cocok';
+          }
           if (pw.length < 4 || pw.length > 128) {
             throw 'Password harus 4-128 karakter';
           }
-          pdf.security.userPassword = pw;
-          pdf.security.ownerPassword = pw;
-          pdf.security.algorithm = PdfEncryptionAlgorithm.aesx256Bit;
+
+          final security = pdf.security;
+          // AES-256 (revisi 6) bisa lambat/tidak kompatibel di web build.
+          // RC4 128-bit lebih ringan dan didukung semua reader umum.
+          security.algorithm = PdfEncryptionAlgorithm.rc4x128Bit;
+          security.userPassword = pw;
+          security.ownerPassword = pw;
           outName = 'locked_${_singleDoc!.name}';
           break;
         case 'watermark':
-          _applyWatermark(pdf, _watermarkController.text);
+          final watermarkText = _watermarkController.text.trim();
+          if (watermarkText.isEmpty) {
+            throw 'Teks watermark tidak boleh kosong';
+          }
+          if (watermarkText.length > 100) {
+            throw 'Teks watermark maksimal 100 karakter (saat ini: ${watermarkText.length})';
+          }
+          _applyWatermark(pdf, watermarkText);
           outName = 'watermarked_${_singleDoc!.name}';
-          break;
-        case 'compress':
-          pdf.compressionLevel = PdfCompressionLevel.best;
-          outName = 'compressed_${_singleDoc!.name}';
           break;
       }
 
@@ -479,6 +748,14 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
   }
 
   void _applyWatermark(PdfDocument pdf, String text) {
+    // Konversi Flutter Color ke PdfColor
+    final pdfColor = PdfColor(
+      _watermarkColor.red,
+      _watermarkColor.green,
+      _watermarkColor.blue,
+    );
+    final brush = PdfSolidBrush(pdfColor);
+
     for (var i = 0; i < pdf.pages.count; i++) {
       final page = pdf.pages[i];
       final gfx = page.graphics;
@@ -489,7 +766,7 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
       gfx.drawString(
         text,
         PdfStandardFont(PdfFontFamily.helvetica, 48, style: PdfFontStyle.bold),
-        brush: PdfBrushes.red,
+        brush: brush,
         bounds: Rect.fromLTWH(-page.size.width / 2, 0, page.size.width, 60),
         format: PdfStringFormat(alignment: PdfTextAlignment.center),
       );
@@ -502,7 +779,8 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
   }
 
   void _showResult(String fileName, Uint8List bytes) {
-    setState(() => _status = 'Berhasil! Ukuran hasil: ${(bytes.length / 1024).toStringAsFixed(0)} KB');
+    setState(() => _status =
+        'Berhasil! Ukuran hasil: ${(bytes.length / 1024).toStringAsFixed(0)} KB');
     showDialog(
       context: context,
       builder: (_) => EditorResultDialog(fileName: fileName, bytes: bytes),
