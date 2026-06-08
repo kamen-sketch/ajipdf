@@ -11,6 +11,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../../../../core/providers/document_provider.dart';
 import '../../../../core/providers/subscription_provider.dart';
 import '../../../../core/services/hive_service.dart';
+import '../../../../core/services/error_reporter.dart';
 import '../../../../core/theme/app_theme.dart';
 
 /// PDF Viewer Screen — ISO 32000 Compliant Annotations
@@ -76,6 +77,8 @@ class _PDFViewerScreenState extends ConsumerState<PDFViewerScreen> {
     super.initState();
     final doc = ref.read(activeDocumentProvider);
     _title = doc?.name ?? 'PDF Viewer';
+    ErrorReporter.instance
+        .addBreadcrumb('pdf_viewer', 'open_${doc?.name ?? "empty"}');
 
     if (doc?.bytes != null) {
       // PRIORITAS: baca dari Hive (bytes terakhir yang sudah dianotasi)
@@ -168,6 +171,8 @@ class _PDFViewerScreenState extends ConsumerState<PDFViewerScreen> {
     } catch (e, st) {
       debugPrint('[Viewer] Save error: $e\n$st');
       _snack('Gagal simpan: $e');
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'pdf_viewer', action: 'save_document', severity: 'high');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

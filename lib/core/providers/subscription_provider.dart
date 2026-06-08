@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/api_service.dart';
+import '../services/error_reporter.dart';
 import 'auth_provider.dart';
 
 /// Subscription tier
@@ -36,9 +38,11 @@ class SubscriptionState {
 
   bool get isPro => tier == SubscriptionTier.pro;
 
-  /// Sisa kuota split/merge untuk Free. Pro = tak terbatas.
-  int get splitMergeRemaining =>
-      isPro ? -1 : (FreeLimits.splitMergeMonthly - splitMergeUsed).clamp(0, FreeLimits.splitMergeMonthly);
+  /// Sisa kuota split/merge untuk Free. Pro = tak terbatas (-1).
+  int get splitMergeRemaining => isPro
+      ? -1
+      : (FreeLimits.splitMergeMonthly - splitMergeUsed)
+          .clamp(0, FreeLimits.splitMergeMonthly);
 
   SubscriptionState copyWith({
     SubscriptionTier? tier,
@@ -73,19 +77,67 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
 
   final Ref _ref;
 
-  /// Sinkronkan tier berdasarkan akun yang login.
+  /// Sinkronkan tier berdasarkan akun yang login dan fetch dari API.
   void _syncWithAuth() {
     final auth = _ref.read(authStateProvider);
     final email = auth.email?.toLowerCase().trim();
 
+    // Whitelist check — langsung Pro tanpa API
     if (email != null && kProWhitelistEmails.contains(email)) {
       if (state.tier != SubscriptionTier.pro) {
         state = state.copyWith(tier: SubscriptionTier.pro);
       }
+      return;
+    }
+
+    // Jika authenticated, fetch subscription dari backend
+    if (auth.isAuthenticated) {
+      _fetchSubscription();
+    } else {
+      // Reset ke free jika logout
+      state = const SubscriptionState();
     }
   }
 
-  /// Upgrade manual ke Pro (mis. setelah pembelian berhasil).
+  /// Fetch subscription status dari backend.
+  Future<void> _fetchSubscription() async {
+    try {
+      final response = await ApiService.instance.get('/subscriptions');
+      final body = response.data as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>? ?? body;
+
+      final planStr = data['plan'] as String? ?? 'free';
+      final tier = (planStr == 'pro' || planStr == 'enterprise')
+          ? SubscriptionTier.pro
+          : SubscriptionTier.free;
+
+      state =
+          SubscriptionState(tier: tier, splitMergeUsed: state.splitMergeUsed);
+    } catch (e, st) {
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'Subscription', action: '_fetchSubscription');
+    }
+  }
+
+  /// Upgrade ke plan tertentu via backend.
+  Future<bool> upgrade(String plan) async {
+    try {
+      ErrorReporter.instance.addBreadcrumb('Subscription', 'upgrade_$plan');
+      await ApiService.instance.post(
+        '/subscriptions/upgrade',
+        data: {'plan': plan},
+      );
+
+      state = state.copyWith(tier: SubscriptionTier.pro);
+      return true;
+    } catch (e, st) {
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'Subscription', action: 'upgrade', severity: 'high');
+      return false;
+    }
+  }
+
+  /// Upgrade manual ke Pro (legacy, lokal).
   void upgradeToPro() {
     state = state.copyWith(tier: SubscriptionTier.pro);
   }
@@ -116,10 +168,22 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
     }
   }
 
-  /// Catat penggunaan satu operasi split/merge (Free saja).
-  void recordSplitMergeUsage() {
+  /// Catat penggunaan satu operasi split/merge, kirim ke backend.
+  Future<void> recordSplitMergeUsage() async {
     if (state.isPro) return;
+
+    // Optimistic local update
     state = state.copyWith(splitMergeUsed: state.splitMergeUsed + 1);
+
+    try {
+      await ApiService.instance.post(
+        '/documents/log-operation',
+        data: {'type': 'split_merge'},
+      );
+    } catch (e, st) {
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'Subscription', action: 'recordSplitMergeUsage');
+    }
   }
 }
 

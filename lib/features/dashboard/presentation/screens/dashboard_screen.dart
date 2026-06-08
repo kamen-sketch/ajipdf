@@ -277,22 +277,87 @@ class _HomeTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final sub = ref.watch(subscriptionProvider);
     final wallpaper = ref.watch(dashboardWallpaperProvider);
+    final scheme = ref.watch(currentColorSchemeProvider);
+    final auth = ref.watch(authStateProvider);
 
     Widget content = SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Welcome back!',
-              style: theme.textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(
-            sub.isPro
-                ? 'Akun Pro aktif - semua fitur terbuka'
-                : 'Sisa kuota split/merge: ${sub.splitMergeRemaining}',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: AppTheme.textSecondary),
+          // ─── GREETING CARD ───
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: scheme.gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: scheme.primary.withValues(alpha: 0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: Colors.white.withValues(alpha: 0.25),
+                      child: Text(
+                        (auth.displayName ?? 'U')[0].toUpperCase(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Halo, ${auth.displayName ?? 'User'}!',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17)),
+                          const SizedBox(height: 2),
+                          Text(
+                            sub.isPro
+                                ? '⭐ Pro — Semua fitur terbuka'
+                                : 'Free • ${sub.splitMergeRemaining} kuota tersisa',
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!sub.isPro)
+                      OutlinedButton(
+                        onPressed: () => context.push('/subscription'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white70),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          textStyle: const TextStyle(fontSize: 11),
+                        ),
+                        child: const Text('Upgrade'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           Text('Quick Actions',
@@ -302,10 +367,10 @@ class _HomeTab extends ConsumerWidget {
           GridView.count(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.5,
+            crossAxisCount: 3,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.9,
             children: [
               QuickActionCard(
                 icon: Icons.visibility_outlined,

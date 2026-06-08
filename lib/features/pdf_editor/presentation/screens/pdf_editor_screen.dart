@@ -8,6 +8,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../../../core/providers/document_provider.dart';
 import '../../../../core/providers/subscription_provider.dart';
 import '../../../../core/services/pdf_compress_service.dart';
+import '../../../../core/services/error_reporter.dart';
 import '../widgets/editor_result.dart';
 import '../widgets/multi_result_dialog.dart';
 
@@ -511,6 +512,7 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
   }
 
   Future<void> _runMerge() async {
+    ErrorReporter.instance.addBreadcrumb('pdf_editor', 'merge_start');
     setState(() {
       _processing = true;
       _status = null;
@@ -566,12 +568,16 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
     } catch (e, st) {
       debugPrint('[Merge] Error: $e\n$st');
       setState(() => _status = 'Gagal merge: $e');
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'pdf_editor', action: 'merge', severity: 'high');
     } finally {
       if (mounted) setState(() => _processing = false);
     }
   }
 
   Future<void> _runSplit() async {
+    ErrorReporter.instance.addBreadcrumb('pdf_editor',
+        'split_start_pages_${_rangeStartController.text}-${_rangeEndController.text}');
     setState(() {
       _processing = true;
       _status = null;
@@ -627,6 +633,8 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
     } catch (e, st) {
       debugPrint('Split error: $e\n$st');
       setState(() => _status = 'Gagal split: $e');
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'pdf_editor', action: 'split', severity: 'high');
     } finally {
       if (mounted) setState(() => _processing = false);
     }
@@ -742,6 +750,8 @@ class _PDFEditorScreenState extends ConsumerState<PDFEditorScreen> {
       _showResult(outName, out);
     } catch (e) {
       setState(() => _status = 'Gagal: $e');
+      ErrorReporter.instance.reportError(e, StackTrace.current,
+          screen: 'pdf_editor', action: _op, severity: 'medium');
     } finally {
       if (mounted) setState(() => _processing = false);
     }

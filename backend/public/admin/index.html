@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AjiPDF Admin Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #2563eb;
+      --primary-light: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    
+    /* Login */
+    #login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .login-card { background: var(--card); padding: 40px; border-radius: var(--radius); box-shadow: 0 4px 24px rgba(0,0,0,0.08); width: 100%; max-width: 400px; }
+    .login-card h1 { font-size: 24px; margin-bottom: 8px; color: var(--primary); }
+    .login-card p { color: var(--text-secondary); margin-bottom: 24px; font-size: 14px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+    .form-group input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .form-group input:focus { border-color: var(--primary); }
+    .btn { display: inline-block; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: var(--primary); color: white; width: 100%; }
+    .btn-primary:hover { background: var(--primary-light); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-warning { background: var(--warning); color: white; }
+    .error-msg { color: var(--danger); font-size: 13px; margin-top: 8px; display: none; }
+
+    /* Dashboard */
+    #dashboard { display: none; }
+    .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar h2 { font-size: 18px; color: var(--primary); }
+    .topbar .user-info { font-size: 13px; color: var(--text-secondary); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--card); border-radius: var(--radius); padding: 4px; border: 1px solid var(--border); overflow-x: auto; }
+    .tab { padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: all 0.2s; white-space: nowrap; }
+    .tab.active { background: var(--primary); color: white; }
+    .tab:hover:not(.active) { background: #f1f5f9; }
+
+    /* Stats Cards */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--card); border-radius: var(--radius); padding: 20px; border: 1px solid var(--border); }
+    .stat-card .label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .stat-card .value.primary { color: var(--primary); }
+    .stat-card .value.success { color: var(--success); }
+    .stat-card .value.warning { color: var(--warning); }
+    .stat-card .value.danger { color: var(--danger); }
+
+    /* Table */
+    .card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; margin-bottom: 24px; }
+    .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { font-size: 15px; }
+    .search-input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; width: 220px; outline: none; }
+    .search-input:focus { border-color: var(--primary); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #f8fafc; padding: 10px 16px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td { padding: 10px 16px; border-top: 1px solid var(--border); }
+    tr:hover td { background: #f8fafc; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+    .badge-pro { background: #fef3c7; color: #92400e; }
+    .badge-free { background: #e2e8f0; color: #475569; }
+    .badge-enterprise { background: #dbeafe; color: #1e40af; }
+    .badge-admin { background: #fce7f3; color: #9d174d; }
+    .badge-active { background: #d1fae5; color: #065f46; }
+    .badge-inactive { background: #fee2e2; color: #991b1b; }
+    .badge-warn { background: #fef3c7; color: #92400e; }
+
+    /* Pagination */
+    .pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
+    .pagination button { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; font-size: 12px; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Chart-like bar */
+    .bar-chart { display: flex; flex-direction: column; gap: 8px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; }
+    .bar-label { width: 90px; font-size: 12px; color: var(--text-secondary); text-align: right; }
+    .bar-fill { height: 24px; border-radius: 4px; background: var(--primary-light); min-width: 4px; transition: width 0.5s; display: flex; align-items: center; padding-left: 8px; }
+    .bar-fill span { font-size: 11px; color: white; font-weight: 500; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN PAGE -->
+<div id="login-page">
+  <div class="login-card">
+    <h1>🔒 AjiPDF Admin</h1>
+    <p>Masuk dengan akun admin untuk mengakses dashboard.</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" value="admin@ajipdf.com" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" value="admin123" />
+    </div>
+    <div class="error-msg" id="login-error"></div>
+    <button class="btn btn-primary" onclick="doLogin()">Masuk</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <div class="topbar">
+    <h2>📊 AjiPDF Admin</h2>
+    <div>
+      <span class="user-info" id="admin-name">Admin</span>
+      &nbsp;
+      <button class="btn btn-sm btn-danger" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-tab="overview">Overview</div>
+      <div class="tab" data-tab="users">Users</div>
+      <div class="tab" data-tab="operations">Operations</div>
+      <div class="tab" data-tab="documents">Documents</div>
+      <div class="tab" data-tab="subscribers">Subscribers</div>
+      <div class="tab" data-tab="analytics">🐛 Error Analytics</div>
+      <div class="tab" data-tab="security">Security</div>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div class="tab-content active" id="tab-overview">
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="card">
+        <div class="card-header"><h3>Fitur Paling Sering Digunakan (30 hari)</h3></div>
+        <div style="padding:20px;" id="ops-chart"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>User Terbaru</h3></div>
+        <table><thead><tr><th>Nama</th><th>Email</th><th>Role</th><th>Terdaftar</th></tr></thead><tbody id="recent-users"></tbody></table>
+      </div>
+    </div>
+
+    <!-- USERS TAB -->
+    <div class="tab-content" id="tab-users">
+      <div class="card">
+        <div class="card-header">
+          <h3>Semua Users</h3>
+          <input class="search-input" placeholder="Cari email/nama..." id="user-search" oninput="searchUsers()" />
+        </div>
+        <table><thead><tr><th>Nama</th><th>Email</th><th>Plan</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th>Aksi</th></tr></thead><tbody id="users-table"></tbody></table>
+        <div class="pagination" id="users-pagination"></div>
+      </div>
+    </div>
+
+    <!-- OPERATIONS TAB -->
+    <div class="tab-content" id="tab-operations">
+      <div class="card">
+        <div class="card-header">
+          <h3>Log Operasi</h3>
+          <select id="ops-filter" onchange="loadOperations()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <option value="">Semua</option>
+            <option value="split">Split</option>
+            <option value="merge">Merge</option>
+            <option value="compress">Compress</option>
+            <option value="encrypt">Encrypt</option>
+            <option value="watermark">Watermark</option>
+            <option value="sign">Sign</option>
+            <option value="ocr">OCR</option>
+            <option value="scan">Scan</option>
+            <option value="rotate">Rotate</option>
+            <option value="annotate">Annotate</option>
+          </select>
+        </div>
+        <table><thead><tr><th>User</th><th>Operasi</th><th>Input</th><th>Output</th><th>Waktu</th></tr></thead><tbody id="ops-table"></tbody></table>
+        <div class="pagination" id="ops-pagination"></div>
+      </div>
+    </div>
+
+    <!-- DOCUMENTS TAB -->
+    <div class="tab-content" id="tab-documents">
+      <div class="card">
+        <div class="card-header"><h3>Semua Dokumen</h3></div>
+        <table><thead><tr><th>Nama File</th><th>User</th><th>Ukuran</th><th>Halaman</th><th>Dibuat</th><th>⚠️</th></tr></thead><tbody id="docs-table"></tbody></table>
+        <div class="pagination" id="docs-pagination"></div>
+      </div>
+    </div>
+
+    <!-- SUBSCRIBERS TAB -->
+    <div class="tab-content" id="tab-subscribers">
+      <div class="card">
+        <div class="card-header"><h3>Subscribers Pro & Enterprise</h3></div>
+        <table><thead><tr><th>Nama</th><th>Email</th><th>Plan</th><th>Status</th><th>Berlaku s/d</th><th>Aksi</th></tr></thead><tbody id="subs-table"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ANALYTICS / ERROR TAB -->
+    <div class="tab-content" id="tab-analytics">
+      <div class="stats-grid" id="error-stats-grid"></div>
+      <div class="card">
+        <div class="card-header">
+          <h3>🐛 Error Patterns</h3>
+          <div style="display:flex;gap:8px;">
+            <select id="error-status-filter" onchange="loadErrorPatterns()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+              <option value="">Semua Status</option>
+              <option value="new">New</option>
+              <option value="investigating">Investigating</option>
+              <option value="fixed">Fixed</option>
+              <option value="wontfix">Won't Fix</option>
+            </select>
+            <select id="error-severity-filter" onchange="loadErrorPatterns()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+              <option value="">Semua Severity</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Severity</th><th>Error</th><th>Screen</th><th>Action</th><th>Count</th><th>Users</th><th>Last Seen</th><th>Status</th><th>Aksi</th></tr></thead>
+          <tbody id="error-patterns-table"></tbody>
+        </table>
+        <div class="pagination" id="errors-pagination"></div>
+      </div>
+
+      <!-- Error Detail Modal (shown inline) -->
+      <div class="card" id="error-detail-card" style="display:none;margin-top:16px;">
+        <div class="card-header">
+          <h3>📋 Detail Error</h3>
+          <button class="btn btn-sm" onclick="document.getElementById('error-detail-card').style.display='none'">✕ Tutup</button>
+        </div>
+        <div id="error-detail-content" style="padding:20px;"></div>
+      </div>
+    </div>
+
+    <!-- SECURITY TAB -->
+    <div class="tab-content" id="tab-security">
+      <div class="card">
+        <div class="card-header"><h3>🚨 Deteksi Potensi Pembajakan</h3></div>
+        <p style="padding:16px;font-size:13px;color:var(--text-secondary);">User Free yang mengakses fitur Pro secara mencurigakan (banyak operasi Pro dalam sebulan).</p>
+        <table><thead><tr><th>User</th><th>Plan</th><th>Pro Operations</th><th>Bulan</th><th>Aksi</th></tr></thead><tbody id="piracy-table"></tbody></table>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header"><h3>📄 File Mencurigakan</h3></div>
+        <p style="padding:16px;font-size:13px;color:var(--text-secondary);">File dengan nama atau ukuran tidak wajar yang bisa berbahaya bagi aplikasi.</p>
+        <table><thead><tr><th>Nama File</th><th>User</th><th>Ukuran</th><th>Alasan</th><th>Waktu</th></tr></thead><tbody id="suspicious-files"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:3000/api';
+let token = localStorage.getItem('admin_token');
+let currentPage = { users: 1, ops: 1, docs: 1 };
+
+// ============ AUTH ============
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!data.success) { errEl.textContent = data.message; errEl.style.display = 'block'; return; }
+    if (data.data.user.role !== 'admin') { errEl.textContent = 'Akun bukan admin'; errEl.style.display = 'block'; return; }
+
+    token = data.data.token;
+    localStorage.setItem('admin_token', token);
+    document.getElementById('admin-name').textContent = data.data.user.displayName;
+    showDashboard();
+  } catch (e) { errEl.textContent = 'Gagal koneksi ke server'; errEl.style.display = 'block'; }
+}
+
+function doLogout() {
+  localStorage.removeItem('admin_token');
+  token = null;
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+}
+
+function showDashboard() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  loadOverview();
+}
+
+// ============ API HELPER ============
+async function api(path, options = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  if (res.status === 401) { doLogout(); return null; }
+  return res.json();
+}
+
+// ============ TABS ============
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    
+    // Load data
+    switch(tab.dataset.tab) {
+      case 'overview': loadOverview(); break;
+      case 'users': loadUsers(); break;
+      case 'operations': loadOperations(); break;
+      case 'documents': loadDocuments(); break;
+      case 'subscribers': loadSubscribers(); break;
+      case 'analytics': loadErrorPatterns(); break;
+      case 'security': loadSecurity(); break;
+    }
+  });
+});
+
+// ============ OVERVIEW ============
+async function loadOverview() {
+  const data = await api('/admin/stats');
+  if (!data) return;
+  const s = data.data.overview;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="label">Total Users</div><div class="value primary">${s.totalUsers}</div></div>
+    <div class="stat-card"><div class="label">Active Users</div><div class="value success">${s.activeUsers}</div></div>
+    <div class="stat-card"><div class="label">Pro Users</div><div class="value warning">${s.proUsers}</div></div>
+    <div class="stat-card"><div class="label">Total Dokumen</div><div class="value">${s.totalDocuments}</div></div>
+    <div class="stat-card"><div class="label">Total Operasi</div><div class="value primary">${s.totalOperations}</div></div>
+    <div class="stat-card"><div class="label">Operasi Hari Ini</div><div class="value success">${s.todayOperations}</div></div>
+  `;
+
+  // Operations chart
+  const ops = data.data.operationsByType || [];
+  const maxCount = ops.length > 0 ? ops[0].count : 1;
+  document.getElementById('ops-chart').innerHTML = ops.length === 0 
+    ? '<p style="color:var(--text-secondary);font-size:13px;">Belum ada data operasi.</p>'
+    : '<div class="bar-chart">' + ops.map(o => `
+      <div class="bar-row">
+        <div class="bar-label">${o.type}</div>
+        <div class="bar-fill" style="width:${Math.max((o.count/maxCount)*100, 10)}%"><span>${o.count}x</span></div>
+      </div>
+    `).join('') + '</div>';
+
+  // Recent users
+  document.getElementById('recent-users').innerHTML = (data.data.recentUsers || []).map(u => `
+    <tr>
+      <td>${u.display_name}</td>
+      <td>${u.email}</td>
+      <td><span class="badge ${u.role==='admin'?'badge-admin':'badge-free'}">${u.role}</span></td>
+      <td>${new Date(u.created_at).toLocaleDateString('id-ID')}</td>
+    </tr>
+  `).join('');
+}
+
+// ============ USERS ============
+async function loadUsers(page = 1) {
+  currentPage.users = page;
+  const search = document.getElementById('user-search')?.value || '';
+  const data = await api(`/admin/users?page=${page}&limit=20&search=${encodeURIComponent(search)}`);
+  if (!data) return;
+
+  document.getElementById('users-table').innerHTML = data.data.map(u => `
+    <tr>
+      <td><strong>${u.display_name}</strong></td>
+      <td>${u.email}</td>
+      <td><span class="badge badge-${u.current_plan||'free'}">${(u.current_plan||'free').toUpperCase()}</span></td>
+      <td><span class="badge ${u.role==='admin'?'badge-admin':'badge-free'}">${u.role}</span></td>
+      <td><span class="badge ${u.is_active?'badge-active':'badge-inactive'}">${u.is_active?'Aktif':'Nonaktif'}</span></td>
+      <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString('id-ID') : '-'}</td>
+      <td>
+        <button class="btn btn-sm ${u.is_active?'btn-warning':'btn-success'}" onclick="toggleUser('${u.id}',${!u.is_active})">${u.is_active?'Ban':'Aktifkan'}</button>
+      </td>
+    </tr>
+  `).join('');
+
+  renderPagination('users-pagination', data.pagination, loadUsers);
+}
+
+let searchTimeout;
+function searchUsers() { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => loadUsers(1), 300); }
+
+async function toggleUser(id, active) {
+  await api(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify({ isActive: active }) });
+  loadUsers(currentPage.users);
+}
+
+// ============ OPERATIONS ============
+async function loadOperations(page = 1) {
+  currentPage.ops = page;
+  const type = document.getElementById('ops-filter')?.value || '';
+  const data = await api(`/admin/operations?page=${page}&limit=50${type?'&type='+type:''}`);
+  if (!data) return;
+
+  document.getElementById('ops-table').innerHTML = data.data.map(o => `
+    <tr>
+      <td>${o.display_name} <small style="color:var(--text-secondary)">(${o.email})</small></td>
+      <td><span class="badge badge-${o.type==='ocr'||o.type==='sign'?'pro':'free'}">${o.type}</span></td>
+      <td>${formatSize(o.input_size)}</td>
+      <td>${formatSize(o.output_size)}</td>
+      <td>${new Date(o.created_at).toLocaleString('id-ID')}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-secondary)">Belum ada data</td></tr>';
+
+  renderPagination('ops-pagination', data.pagination, loadOperations);
+}
+
+// ============ DOCUMENTS ============
+async function loadDocuments(page = 1) {
+  currentPage.docs = page;
+  const data = await api(`/admin/documents?page=${page}&limit=20`);
+  if (!data) return;
+
+  const suspicious = ['exe', 'bat', 'sh', 'cmd', 'vbs', 'js', 'php', 'py'];
+
+  document.getElementById('docs-table').innerHTML = data.data.map(d => {
+    const ext = d.name.split('.').pop().toLowerCase();
+    const isSus = suspicious.includes(ext) || d.file_size > 100*1024*1024 || d.name.includes('..') || d.name.includes('<');
+    return `
+      <tr style="${isSus?'background:#fef2f2':''}">
+        <td>${d.name}</td>
+        <td>${d.display_name}</td>
+        <td>${formatSize(d.file_size)}</td>
+        <td>${d.page_count || '-'}</td>
+        <td>${new Date(d.created_at).toLocaleDateString('id-ID')}</td>
+        <td>${isSus ? '<span class="badge badge-warn">⚠️ Cek</span>' : '✓'}</td>
+      </tr>
+    `;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:20px;">Belum ada dokumen</td></tr>';
+
+  renderPagination('docs-pagination', data.pagination, loadDocuments);
+}
+
+// ============ SUBSCRIBERS ============
+async function loadSubscribers() {
+  const data = await api('/admin/users?limit=100');
+  if (!data) return;
+  const subs = data.data.filter(u => u.current_plan && u.current_plan !== 'free');
+
+  document.getElementById('subs-table').innerHTML = subs.length === 0
+    ? '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-secondary)">Belum ada subscriber</td></tr>'
+    : subs.map(u => `
+      <tr>
+        <td><strong>${u.display_name}</strong></td>
+        <td>${u.email}</td>
+        <td><span class="badge badge-${u.current_plan}">${u.current_plan.toUpperCase()}</span></td>
+        <td><span class="badge badge-active">Active</span></td>
+        <td>-</td>
+        <td><button class="btn btn-sm btn-danger" onclick="cancelSub('${u.id}')">Cancel</button></td>
+      </tr>
+    `).join('');
+}
+
+async function cancelSub(userId) {
+  if (!confirm('Yakin cancel subscription user ini?')) return;
+  await api(`/admin/users/${userId}/subscription`, { method: 'PUT', body: JSON.stringify({ plan: 'free' }) });
+  loadSubscribers();
+}
+
+// ============ SECURITY ============
+async function loadSecurity() {
+  // Detect free users with pro-level operations
+  const opsData = await api('/admin/operations?limit=200');
+  const usersData = await api('/admin/users?limit=200');
+  if (!opsData || !usersData) return;
+
+  const freeUsers = new Set(usersData.data.filter(u => !u.current_plan || u.current_plan === 'free').map(u => u.id));
+  const proOps = ['sign', 'ocr', 'annotate'];
+  
+  // Count pro operations by free users
+  const suspectMap = {};
+  for (const op of opsData.data) {
+    if (freeUsers.has(op.user_id) && proOps.includes(op.type)) {
+      if (!suspectMap[op.user_id]) suspectMap[op.user_id] = { email: op.email, name: op.display_name, count: 0 };
+      suspectMap[op.user_id].count++;
+    }
+  }
+
+  const suspects = Object.entries(suspectMap).filter(([,v]) => v.count >= 3).sort((a,b) => b[1].count - a[1].count);
+  document.getElementById('piracy-table').innerHTML = suspects.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-secondary)">Tidak ada aktivitas mencurigakan</td></tr>'
+    : suspects.map(([id, s]) => `
+      <tr style="background:#fef2f2">
+        <td>${s.name} <small>(${s.email})</small></td>
+        <td><span class="badge badge-free">FREE</span></td>
+        <td><strong style="color:var(--danger)">${s.count}x</strong></td>
+        <td>${new Date().toISOString().slice(0,7)}</td>
+        <td><button class="btn btn-sm btn-warning" onclick="toggleUser('${id}',false)">Ban</button></td>
+      </tr>
+    `).join('');
+
+  // Suspicious files
+  const docsData = await api('/admin/documents?limit=100');
+  if (!docsData) return;
+  const suspiciousExts = ['exe', 'bat', 'sh', 'cmd', 'vbs', 'js', 'php', 'py', 'ps1', 'dll', 'msi'];
+  const susFiles = docsData.data.filter(d => {
+    const ext = d.name.split('.').pop().toLowerCase();
+    return suspiciousExts.includes(ext) || d.file_size > 100*1024*1024 || d.name.includes('..') || d.name.includes('<') || d.name.includes('>');
+  });
+
+  document.getElementById('suspicious-files').innerHTML = susFiles.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-secondary)">Tidak ada file mencurigakan</td></tr>'
+    : susFiles.map(d => {
+      const ext = d.name.split('.').pop().toLowerCase();
+      let reason = '';
+      if (suspiciousExts.includes(ext)) reason = `Ekstensi berbahaya (.${ext})`;
+      else if (d.file_size > 100*1024*1024) reason = 'Ukuran > 100MB';
+      else reason = 'Nama file mencurigakan';
+      return `
+        <tr style="background:#fef2f2">
+          <td><strong>${d.name}</strong></td>
+          <td>${d.display_name}</td>
+          <td>${formatSize(d.file_size)}</td>
+          <td><span class="badge badge-warn">${reason}</span></td>
+          <td>${new Date(d.created_at).toLocaleDateString('id-ID')}</td>
+        </tr>
+      `;
+    }).join('');
+}
+
+// ============ HELPERS ============
+function formatSize(bytes) {
+  if (!bytes) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(0) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function renderPagination(elementId, pg, loadFn) {
+  if (!pg) return;
+  document.getElementById(elementId).innerHTML = `
+    <span>Halaman ${pg.page}/${pg.totalPages} (${pg.total} data)</span>
+    <div>
+      <button ${pg.page<=1?'disabled':''} onclick="(${loadFn.name})(${pg.page-1})">← Prev</button>
+      <button ${pg.page>=pg.totalPages?'disabled':''} onclick="(${loadFn.name})(${pg.page+1})">Next →</button>
+    </div>
+  `;
+}
+
+// ============ ERROR ANALYTICS ============
+async function loadErrorPatterns(page = 1) {
+  // Load stats
+  const stats = await api('/errors/stats');
+  if (stats && stats.success) {
+    const s = stats.data;
+    document.getElementById('error-stats-grid').innerHTML = `
+      <div class="stat-card"><div class="label">Total Patterns</div><div class="value primary">${s.total}</div></div>
+      <div class="stat-card"><div class="label">New (Belum Ditangani)</div><div class="value danger">${s.newCount}</div></div>
+      <div class="stat-card"><div class="label">Critical Unfixed</div><div class="value danger">${s.criticalCount}</div></div>
+      <div class="stat-card"><div class="label">Error Hari Ini</div><div class="value warning">${s.todayCount}</div></div>
+    `;
+  }
+
+  // Load patterns
+  const status = document.getElementById('error-status-filter')?.value || '';
+  const severity = document.getElementById('error-severity-filter')?.value || '';
+  let url = `/errors/patterns?page=${page}&limit=30`;
+  if (status) url += `&status=${status}`;
+  if (severity) url += `&severity=${severity}`;
+
+  const data = await api(url);
+  if (!data) return;
+
+  const severityColors = { critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#65a30d' };
+  const severityBadge = (s) => `<span class="badge" style="background:${severityColors[s]||'#999'};color:white">${s.toUpperCase()}</span>`;
+  const statusBadge = (s) => {
+    const colors = { new: '#ef4444', investigating: '#f59e0b', fixed: '#10b981', wontfix: '#6b7280' };
+    return `<span class="badge" style="background:${colors[s]||'#999'}20;color:${colors[s]||'#999'}">${s}</span>`;
+  };
+
+  document.getElementById('error-patterns-table').innerHTML = data.data.length === 0
+    ? '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text-secondary)">Belum ada error report 🎉</td></tr>'
+    : data.data.map(p => `
+      <tr>
+        <td>${severityBadge(p.severity)}</td>
+        <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(p.error_message)}">${escHtml(p.error_message.slice(0,80))}</td>
+        <td>${p.screen || '-'}</td>
+        <td>${p.action || '-'}</td>
+        <td><strong>${p.occurrence_count}</strong></td>
+        <td>${p.affected_users}</td>
+        <td>${timeAgo(p.last_seen_at)}</td>
+        <td>${statusBadge(p.status)}</td>
+        <td>
+          <button class="btn btn-sm btn-primary" onclick="showErrorDetail('${p.id}')">Detail</button>
+        </td>
+      </tr>
+    `).join('');
+
+  renderPagination('errors-pagination', data.pagination, loadErrorPatterns);
+}
+
+async function showErrorDetail(patternId) {
+  const data = await api(`/errors/patterns/${patternId}`);
+  if (!data || !data.success) return;
+
+  const p = data.data.pattern;
+  const occs = data.data.occurrences;
+
+  let html = `
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <select id="detail-status" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+          <option value="new" ${p.status==='new'?'selected':''}>New</option>
+          <option value="investigating" ${p.status==='investigating'?'selected':''}>Investigating</option>
+          <option value="fixed" ${p.status==='fixed'?'selected':''}>Fixed</option>
+          <option value="wontfix" ${p.status==='wontfix'?'selected':''}>Won't Fix</option>
+        </select>
+        <select id="detail-severity" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+          <option value="low" ${p.severity==='low'?'selected':''}>Low</option>
+          <option value="medium" ${p.severity==='medium'?'selected':''}>Medium</option>
+          <option value="high" ${p.severity==='high'?'selected':''}>High</option>
+          <option value="critical" ${p.severity==='critical'?'selected':''}>Critical</option>
+        </select>
+        <button class="btn btn-sm btn-success" onclick="updatePattern('${p.id}')">Save</button>
+        <button class="btn btn-sm btn-danger" onclick="deletePattern('${p.id}')">Delete</button>
+      </div>
+      <p><strong>Error:</strong></p>
+      <pre style="background:#f1f5f9;padding:12px;border-radius:8px;font-size:12px;overflow-x:auto;white-space:pre-wrap;">${escHtml(p.error_message)}</pre>
+    </div>
+  `;
+
+  if (p.stack_trace) {
+    html += `
+      <div style="margin-bottom:16px;">
+        <p><strong>Stack Trace:</strong></p>
+        <pre style="background:#1e293b;color:#e2e8f0;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;max-height:200px;white-space:pre-wrap;">${escHtml(p.stack_trace)}</pre>
+      </div>
+    `;
+  }
+
+  html += `
+    <div style="margin-bottom:16px;">
+      <p><strong>Info:</strong> Screen: <code>${p.screen||'-'}</code> | Action: <code>${p.action||'-'}</code> | Total: <strong>${p.occurrence_count}x</strong> dari <strong>${p.affected_users} user</strong></p>
+      <p>First seen: ${new Date(p.first_seen_at).toLocaleString('id-ID')} | Last seen: ${new Date(p.last_seen_at).toLocaleString('id-ID')}</p>
+    </div>
+  `;
+
+  // Notes
+  html += `
+    <div style="margin-bottom:16px;">
+      <p><strong>Notes (catatan perbaikan):</strong></p>
+      <textarea id="detail-notes" style="width:100%;height:60px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:12px;">${p.notes||''}</textarea>
+    </div>
+  `;
+
+  // Occurrences
+  if (occs.length > 0) {
+    html += `<p style="margin-bottom:8px;"><strong>Occurrences (${occs.length} sampel):</strong></p>`;
+    html += occs.map((o, i) => {
+      const device = o.device_info || {};
+      const steps = o.reproduction_steps || [];
+      return `
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:12px;"><strong>#${i+1}</strong> ${o.display_name||'Anonymous'} ${o.email?'('+o.email+')':''}</span>
+            <span style="font-size:11px;color:var(--text-secondary)">${new Date(o.created_at).toLocaleString('id-ID')}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">
+            Platform: <code>${device.platform||o.platform||'-'}</code> | 
+            OS: <code>${device.osVersion||'-'}</code> | 
+            App: <code>${o.app_version||'-'}</code> |
+            Device: <code>${device.deviceModel||'-'}</code>
+          </div>
+          ${steps.length > 0 ? `
+            <div style="margin-top:8px;">
+              <strong style="font-size:11px;">📋 Steps to Reproduce:</strong>
+              <ol style="font-size:12px;padding-left:20px;margin-top:4px;">
+                ${steps.map(s => `<li>${escHtml(s)}</li>`).join('')}
+              </ol>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('error-detail-content').innerHTML = html;
+  document.getElementById('error-detail-card').style.display = 'block';
+  document.getElementById('error-detail-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function updatePattern(id) {
+  const status = document.getElementById('detail-status').value;
+  const severity = document.getElementById('detail-severity').value;
+  const notes = document.getElementById('detail-notes').value;
+  await api(`/errors/patterns/${id}`, { method: 'PUT', body: JSON.stringify({ status, severity, notes }) });
+  loadErrorPatterns();
+}
+
+async function deletePattern(id) {
+  if (!confirm('Hapus error pattern ini?')) return;
+  await api(`/errors/patterns/${id}`, { method: 'DELETE' });
+  document.getElementById('error-detail-card').style.display = 'none';
+  loadErrorPatterns();
+}
+
+function escHtml(str) { return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff/60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins/60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours/24);
+  return `${days}d ago`;
+}
+
+// ============ INIT ============
+if (token) {
+  // Verify token still valid
+  fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success && d.data.role === 'admin') {
+        document.getElementById('admin-name').textContent = d.data.display_name;
+        showDashboard();
+      } else { doLogout(); }
+    })
+    .catch(() => doLogout());
+}
+</script>
+</body>
+</html>

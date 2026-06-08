@@ -7,6 +7,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/services/hive_service.dart';
+import 'core/services/api_service.dart';
+import 'core/services/error_reporter.dart';
 import 'core/providers/theme_provider.dart';
 
 void main() async {
@@ -20,6 +22,21 @@ void main() async {
   // Initialize Hive
   await Hive.initFlutter();
   await HiveService.instance.init();
+
+  // Initialize API Service
+  ApiService.instance.init();
+
+  // Global error handler — tangkap unhandled errors, kirim ke backend analytics
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    ErrorReporter.instance.reportError(
+      details.exception,
+      details.stack,
+      screen: 'global',
+      action: 'flutter_error',
+      severity: 'critical',
+    );
+  };
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
