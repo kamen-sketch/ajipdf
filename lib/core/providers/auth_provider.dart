@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../services/api_service.dart';
 import '../services/error_reporter.dart';
@@ -189,14 +190,85 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Login with Google — stub, OAuth not configured
+  /// Login with Google via google_sign_in package.
+  /// Web: uses client ID from index.html meta tag.
+  /// Setelah dapat email dari Google, register/login di backend kita.
   Future<bool> loginWithGoogle() async {
-    state = state.copyWith(
-      isLoading: false,
-      error: 'OAuth belum dikonfigurasi',
-    );
-    _controller.add(state);
-    return false;
+    state = state.copyWith(isLoading: true, error: null);
+    ErrorReporter.instance.addBreadcrumb('Auth', 'google_login_attempt');
+
+    try {
+      final googleSignIn = GoogleSignIn(scopes: ['email']);
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        // User cancelled
+        state = state.copyWith(isLoading: false);
+        _controller.add(state);
+        return false;
+      }
+
+      final email = account.email;
+      final displayName = account.displayName ?? email.split('@').first;
+
+      // Try login first, if user doesn't exist — register.
+      try {
+        final loginRes = await ApiService.instance.post(
+          '/auth/login',
+          data: {'email': email, 'password': 'google_oauth_$email'},
+        );
+        final body = loginRes.data as Map<String, dynamic>;
+        final payload = body['data'] as Map<String, dynamic>? ?? body;
+        final jwt = payload['token'] as String;
+        await ApiService.instance.setToken(jwt);
+
+        final user = payload['user'] as Map<String, dynamic>? ?? payload;
+        state = AuthState(
+          userId: user['id']?.toString(),
+          email: user['email'] as String? ?? email,
+          displayName: user['displayName'] as String? ?? displayName,
+          token: jwt,
+          role: user['role'] as String?,
+          isLoading: false,
+        );
+        _controller.add(state);
+        ErrorReporter.instance.addBreadcrumb('Auth', 'google_login_success');
+        return true;
+      } catch (_) {
+        // Login failed — try register
+        final regRes = await ApiService.instance.post(
+          '/auth/register',
+          data: {
+            'email': email,
+            'password': 'google_oauth_$email',
+            'displayName': displayName,
+          },
+        );
+        final body = regRes.data as Map<String, dynamic>;
+        final payload = body['data'] as Map<String, dynamic>? ?? body;
+        final jwt = payload['token'] as String;
+        await ApiService.instance.setToken(jwt);
+
+        final user = payload['user'] as Map<String, dynamic>? ?? payload;
+        state = AuthState(
+          userId: user['id']?.toString(),
+          email: user['email'] as String? ?? email,
+          displayName: user['displayName'] as String? ?? displayName,
+          token: jwt,
+          role: user['role'] as String?,
+          isLoading: false,
+        );
+        _controller.add(state);
+        ErrorReporter.instance.addBreadcrumb('Auth', 'google_register_success');
+        return true;
+      }
+    } catch (e, st) {
+      final message = _extractErrorMessage(e) ?? 'Google Sign-In gagal';
+      state = state.copyWith(isLoading: false, error: message);
+      _controller.add(state);
+      ErrorReporter.instance
+          .reportError(e, st, screen: 'Auth', action: 'loginWithGoogle');
+      return false;
+    }
   }
 
   /// Login with Apple — stub, OAuth not configured
