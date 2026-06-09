@@ -19,6 +19,84 @@
 
   <title>PDF Enterprise Suite</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- RevenueCat Web SDK (ESM module) -->
+  <script type="module">
+    import { Purchases } from "https://cdn.jsdelivr.net/npm/@revenuecat/purchases-js@latest/dist/Purchases.mjs";
+
+    // Expose RevenueCat helpers ke window agar bisa dipanggil dari Dart.
+    let _rcConfigured = false;
+    let _rcInstance = null;
+
+    window.rcConfigure = function(apiKey, appUserId) {
+      try {
+        if (_rcConfigured) return JSON.stringify({ success: true, reused: true });
+        _rcInstance = Purchases.configure({
+          apiKey: apiKey,
+          appUserId: appUserId || Purchases.generateRevenueCatAnonymousAppUserId(),
+        });
+        _rcConfigured = true;
+        return JSON.stringify({ success: true });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.toString() });
+      }
+    };
+
+    // Ambil offerings (paket harga) yang tersedia.
+    window.rcGetOfferings = async function() {
+      try {
+        const offerings = await _rcInstance.getOfferings();
+        const current = offerings.current;
+        if (!current) return JSON.stringify({ success: true, packages: [] });
+        const packages = (current.availablePackages || []).map(p => ({
+          identifier: p.identifier,
+          productId: p.webBillingProduct?.identifier || p.identifier,
+          priceString: p.webBillingProduct?.currentPrice?.formattedPrice || '',
+          title: p.webBillingProduct?.title || '',
+        }));
+        return JSON.stringify({ success: true, packages: packages });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.toString() });
+      }
+    };
+
+    // Beli paket berdasarkan packageIdentifier.
+    window.rcPurchase = async function(packageIdentifier) {
+      try {
+        const offerings = await _rcInstance.getOfferings();
+        const current = offerings.current;
+        const pkg = (current.availablePackages || [])
+          .find(p => p.identifier === packageIdentifier) || current.availablePackages[0];
+        if (!pkg) throw new Error('Paket tidak ditemukan');
+
+        const { customerInfo } = await _rcInstance.purchase({ rcPackage: pkg });
+        const entitlements = Object.keys(customerInfo.entitlements.active || {});
+        return JSON.stringify({
+          success: true,
+          customerId: customerInfo.originalAppUserId,
+          activeEntitlements: entitlements,
+          productId: pkg.webBillingProduct?.identifier || pkg.identifier,
+        });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.toString() });
+      }
+    };
+
+    // Cek status customer (untuk restore).
+    window.rcGetCustomerInfo = async function() {
+      try {
+        const customerInfo = await _rcInstance.getCustomerInfo();
+        const entitlements = Object.keys(customerInfo.entitlements.active || {});
+        return JSON.stringify({
+          success: true,
+          customerId: customerInfo.originalAppUserId,
+          activeEntitlements: entitlements,
+        });
+      } catch (e) {
+        return JSON.stringify({ success: false, error: e.toString() });
+      }
+    };
+  </script>
 </head>
 <body>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/build/pdf.js" type="text/javascript"></script>

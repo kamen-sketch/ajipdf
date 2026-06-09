@@ -8,6 +8,7 @@ import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/subscription_provider.dart';
 import '../../../../core/providers/document_provider.dart';
 import '../../../../core/providers/theme_provider.dart';
+import '../../../../core/services/config_service.dart';
 import '../widgets/quick_action_card.dart';
 import '../widgets/recent_document_card.dart';
 
@@ -21,6 +22,82 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedIndex = 0;
+  bool _promoShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cek promo dari config setelah frame pertama.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowPromo());
+  }
+
+  Future<void> _maybeShowPromo() async {
+    if (_promoShown) return;
+    final config = await ConfigService.instance.fetch();
+    final promo = config.promo;
+    if (!promo.isActive || !mounted) return;
+    // Jangan ganggu user Pro dengan promo upgrade.
+    if (ref.read(isProProvider)) return;
+
+    _promoShown = true;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [AppTheme.primaryColor, AppTheme.secondaryColor]),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.local_offer_rounded,
+                  color: Colors.white, size: 36),
+            ),
+            const SizedBox(height: 16),
+            Text(promo.title.isEmpty ? 'Promo Spesial!' : promo.title,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center),
+            if (promo.discountPercent > 0) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.errorColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('Diskon ${promo.discountPercent}%',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(promo.message,
+                style: const TextStyle(color: AppTheme.textSecondary),
+                textAlign: TextAlign.center),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Nanti'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.push('/subscription');
+            },
+            child: const Text('Lihat Penawaran'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

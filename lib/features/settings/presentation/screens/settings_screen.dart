@@ -11,6 +11,7 @@ import '../../../../core/providers/theme_provider.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/providers/subscription_provider.dart';
 import '../../../../core/services/hive_service.dart';
+import '../../../../core/services/api_service.dart';
 
 /// Settings Screen — fully functional with persistence
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -85,6 +86,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               // Profile editing — show edit dialog
               _showProfileEditDialog(context, auth);
             },
+          ),
+          ListTile(
+            leading: const Icon(Icons.lock_reset_outlined),
+            title: const Text('Ganti Password'),
+            subtitle: const Text('Ubah password akun kamu'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showChangePasswordDialog(context),
           ),
           ListTile(
             leading: Icon(
@@ -421,28 +429,133 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit Profile'),
+        title: const Text('Edit Profil'),
         content: TextField(
           controller: nameController,
           decoration: const InputDecoration(
-              labelText: 'Display Name', border: OutlineInputBorder()),
+              labelText: 'Nama Tampilan', border: OutlineInputBorder()),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           FilledButton(
-            onPressed: () {
-              // TODO: update display name in Firebase when implemented
+            onPressed: () async {
+              final newName = nameController.text.trim();
+              if (newName.length < 2) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Nama minimal 2 karakter')));
+                return;
+              }
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text(
-                        'Profile update will be available with Firebase integration.')),
-              );
+              try {
+                await ApiService.instance
+                    .put('/users/profile', data: {'displayName': newName});
+                // Refresh auth state
+                await ref.read(authStateProvider.notifier).refreshProfile();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Profil berhasil diperbarui')));
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Gagal update profil: $e')));
+                }
+              }
             },
-            child: const Text('Save'),
+            child: const Text('Simpan'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context) {
+    final currentCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    bool processing = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          title: const Text('Ganti Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: currentCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                    labelText: 'Password saat ini',
+                    border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                    labelText: 'Password baru (min. 6)',
+                    border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                    labelText: 'Konfirmasi password baru',
+                    border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: processing ? null : () => Navigator.pop(ctx),
+                child: const Text('Batal')),
+            FilledButton(
+              onPressed: processing
+                  ? null
+                  : () async {
+                      if (newCtrl.text.length < 6) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                            content: Text('Password baru minimal 6 karakter')));
+                        return;
+                      }
+                      if (newCtrl.text != confirmCtrl.text) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                            content: Text('Konfirmasi password tidak cocok')));
+                        return;
+                      }
+                      setSt(() => processing = true);
+                      try {
+                        await ApiService.instance
+                            .post('/auth/change-password', data: {
+                          'currentPassword': currentCtrl.text,
+                          'newPassword': newCtrl.text,
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Password berhasil diubah')));
+                        }
+                      } catch (e) {
+                        setSt(() => processing = false);
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                            content: Text(
+                                'Gagal: password saat ini salah atau error')));
+                      }
+                    },
+              child: processing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Ubah'),
+            ),
+          ],
+        ),
       ),
     );
   }

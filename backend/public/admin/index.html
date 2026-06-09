@@ -136,6 +136,7 @@
       <div class="tab" data-tab="documents">Documents</div>
       <div class="tab" data-tab="subscribers">Subscribers</div>
       <div class="tab" data-tab="analytics">🐛 Error Analytics</div>
+      <div class="tab" data-tab="config">⚙️ Config</div>
       <div class="tab" data-tab="security">Security</div>
     </div>
 
@@ -245,6 +246,88 @@
       </div>
     </div>
 
+    <!-- CONFIG TAB -->
+    <div class="tab-content" id="tab-config">
+      <div class="card">
+        <div class="card-header"><h3>💰 Harga Langganan</h3></div>
+        <div style="padding:20px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Label Bulanan</label>
+              <input class="search-input" id="cfg-monthly-label" style="width:100%" placeholder="Rp 49.900/bulan">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Label Tahunan</label>
+              <input class="search-input" id="cfg-yearly-label" style="width:100%" placeholder="Rp 499.000/tahun">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Harga Bulanan (angka)</label>
+              <input class="search-input" id="cfg-monthly-price" type="number" style="width:100%">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Harga Tahunan (angka)</label>
+              <input class="search-input" id="cfg-yearly-price" type="number" style="width:100%">
+            </div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:12px;width:auto" onclick="savePricing()">Simpan Harga</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header"><h3>🎁 Promo Popup</h3></div>
+        <div style="padding:20px;">
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <input type="checkbox" id="cfg-promo-enabled"> Aktifkan popup promo
+          </label>
+          <div style="display:grid;gap:12px;">
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Judul</label>
+              <input class="search-input" id="cfg-promo-title" style="width:100%" placeholder="Promo Spesial!">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Pesan</label>
+              <textarea id="cfg-promo-message" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;" rows="2"></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div>
+                <label style="font-size:12px;color:var(--text-secondary)">Diskon (%)</label>
+                <input class="search-input" id="cfg-promo-discount" type="number" style="width:100%">
+              </div>
+              <div>
+                <label style="font-size:12px;color:var(--text-secondary)">Berakhir (YYYY-MM-DD, opsional)</label>
+                <input class="search-input" id="cfg-promo-expires" style="width:100%" placeholder="2026-12-31">
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:12px;width:auto" onclick="savePromo()">Simpan Promo</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header"><h3>🔧 Fitur Pro & Limitasi Free</h3></div>
+        <div style="padding:20px;">
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Fitur Pro (centang = aktif untuk Pro):</p>
+          <div id="cfg-features" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;"></div>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Limitasi Free:</p>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Split/Merge/bulan</label>
+              <input class="search-input" id="cfg-limit-splitmerge" type="number" style="width:100%">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Max Anotasi</label>
+              <input class="search-input" id="cfg-limit-annotations" type="number" style="width:100%">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-secondary)">Max File (MB)</label>
+              <input class="search-input" id="cfg-limit-filesize" type="number" style="width:100%">
+            </div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:12px;width:auto" onclick="saveFeaturesLimits()">Simpan Fitur & Limit</button>
+        </div>
+      </div>
+    </div>
+
     <!-- SECURITY TAB -->
     <div class="tab-content" id="tab-security">
       <div class="card">
@@ -329,6 +412,7 @@ document.querySelectorAll('.tab').forEach(tab => {
       case 'documents': loadDocuments(); break;
       case 'subscribers': loadSubscribers(); break;
       case 'analytics': loadErrorPatterns(); break;
+      case 'config': loadConfig(); break;
       case 'security': loadSecurity(); break;
     }
   });
@@ -722,6 +806,84 @@ function timeAgo(dateStr) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours/24);
   return `${days}d ago`;
+}
+
+// ============ CONFIG ============
+let _configCache = {};
+async function loadConfig() {
+  const data = await api('/config');
+  if (!data || !data.success) return;
+  _configCache = {};
+  for (const c of data.data) _configCache[c.config_key] = c.config_value;
+
+  const pricing = _configCache.pricing || {};
+  document.getElementById('cfg-monthly-label').value = pricing.monthly_label || '';
+  document.getElementById('cfg-yearly-label').value = pricing.yearly_label || '';
+  document.getElementById('cfg-monthly-price').value = pricing.monthly_price || 0;
+  document.getElementById('cfg-yearly-price').value = pricing.yearly_price || 0;
+
+  const promo = _configCache.promo || {};
+  document.getElementById('cfg-promo-enabled').checked = promo.enabled === true;
+  document.getElementById('cfg-promo-title').value = promo.title || '';
+  document.getElementById('cfg-promo-message').value = promo.message || '';
+  document.getElementById('cfg-promo-discount').value = promo.discount_percent || 0;
+  document.getElementById('cfg-promo-expires').value = promo.expires_at || '';
+
+  const features = _configCache.pro_features || {};
+  const featContainer = document.getElementById('cfg-features');
+  featContainer.innerHTML = Object.keys(features).map(k => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+      <input type="checkbox" data-feature="${k}" ${features[k] ? 'checked' : ''}> ${k}
+    </label>
+  `).join('');
+
+  const limits = _configCache.free_limits || {};
+  document.getElementById('cfg-limit-splitmerge').value = limits.split_merge_monthly || 10;
+  document.getElementById('cfg-limit-annotations').value = limits.max_annotations || 50;
+  document.getElementById('cfg-limit-filesize').value = limits.max_file_size_mb || 20;
+}
+
+async function saveConfig(key, value) {
+  const res = await api(`/config/${key}`, { method: 'PUT', body: JSON.stringify({ value }) });
+  if (res && res.success) {
+    alert('Tersimpan: ' + key);
+  } else {
+    alert('Gagal menyimpan ' + key);
+  }
+}
+
+function savePricing() {
+  saveConfig('pricing', {
+    monthly_label: document.getElementById('cfg-monthly-label').value,
+    yearly_label: document.getElementById('cfg-yearly-label').value,
+    monthly_price: parseInt(document.getElementById('cfg-monthly-price').value) || 0,
+    yearly_price: parseInt(document.getElementById('cfg-yearly-price').value) || 0,
+    currency: 'IDR',
+  });
+}
+
+function savePromo() {
+  const expires = document.getElementById('cfg-promo-expires').value.trim();
+  saveConfig('promo', {
+    enabled: document.getElementById('cfg-promo-enabled').checked,
+    title: document.getElementById('cfg-promo-title').value,
+    message: document.getElementById('cfg-promo-message').value,
+    discount_percent: parseInt(document.getElementById('cfg-promo-discount').value) || 0,
+    expires_at: expires || null,
+  });
+}
+
+function saveFeaturesLimits() {
+  const features = {};
+  document.querySelectorAll('#cfg-features input[data-feature]').forEach(el => {
+    features[el.dataset.feature] = el.checked;
+  });
+  saveConfig('pro_features', features);
+  saveConfig('free_limits', {
+    split_merge_monthly: parseInt(document.getElementById('cfg-limit-splitmerge').value) || 10,
+    max_annotations: parseInt(document.getElementById('cfg-limit-annotations').value) || 50,
+    max_file_size_mb: parseInt(document.getElementById('cfg-limit-filesize').value) || 20,
+  });
 }
 
 // ============ INIT ============

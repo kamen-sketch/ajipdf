@@ -310,6 +310,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(error: null);
   }
 
+  /// Refresh profil dari backend (setelah update nama/foto).
+  Future<void> refreshProfile() async {
+    if (state.token == null) return;
+    try {
+      final response = await ApiService.instance.get('/auth/me');
+      final body = response.data as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>? ?? body;
+      state = state.copyWith(
+        displayName:
+            data['display_name'] as String? ?? data['displayName'] as String?,
+        email: data['email'] as String?,
+        role: data['role'] as String?,
+      );
+      _controller.add(state);
+    } catch (e, st) {
+      ErrorReporter.instance
+          .reportError(e, st, screen: 'Auth', action: 'refreshProfile');
+    }
+  }
+
   /// Extract error message from DioException or generic error
   String? _extractErrorMessage(dynamic e) {
     if (e is Exception) {

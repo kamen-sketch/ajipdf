@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/api_service.dart';
+import '../services/config_service.dart';
 import '../services/error_reporter.dart';
+import '../services/revenuecat_service.dart';
 import 'auth_provider.dart';
 
 /// Subscription tier
@@ -93,9 +95,24 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
     // Jika authenticated, fetch subscription dari backend
     if (auth.isAuthenticated) {
       _fetchSubscription();
+      _configureRevenueCat(auth.userId!);
     } else {
       // Reset ke free jika logout
       state = const SubscriptionState();
+    }
+  }
+
+  /// Konfigurasi RevenueCat dengan user.id sebagai appUserId.
+  Future<void> _configureRevenueCat(String userId) async {
+    try {
+      final config = await ConfigService.instance.fetch();
+      final apiKey = config.revenueCat.apiKey;
+      if (apiKey.isNotEmpty) {
+        await RevenueCatService.configure(apiKey, userId);
+      }
+    } catch (e, st) {
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'Subscription', action: '_configureRevenueCat');
     }
   }
 
@@ -118,6 +135,42 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
           screen: 'Subscription', action: '_fetchSubscription');
     }
   }
+
+  /// Verifikasi pembelian RevenueCat ke backend setelah purchase sukses.
+  /// Backend yang mengaktifkan Pro (server-side), bukan client.
+  Future<bool> verifyRevenueCatPurchase({
+    required String customerId,
+    required String entitlementId,
+    String? productId,
+  }) async {
+    try {
+      ErrorReporter.instance.addBreadcrumb('Subscription', 'verify_revenuecat');
+      final res = await ApiService.instance.post(
+        '/subscriptions/verify-revenuecat',
+        data: {
+          'customerId': customerId,
+          'entitlementId': entitlementId,
+          'productId': productId,
+        },
+      );
+      final body = res.data as Map<String, dynamic>;
+      if (body['success'] == true) {
+        // Re-fetch dari backend agar tier akurat (jangan trust client).
+        await _fetchSubscription();
+        return state.isPro;
+      }
+      return false;
+    } catch (e, st) {
+      ErrorReporter.instance.reportError(e, st,
+          screen: 'Subscription',
+          action: 'verifyRevenueCatPurchase',
+          severity: 'high');
+      return false;
+    }
+  }
+
+  /// Refresh subscription dari backend (publik).
+  Future<void> refresh() => _fetchSubscription();
 
   /// Upgrade ke plan tertentu via backend.
   Future<bool> upgrade(String plan) async {
