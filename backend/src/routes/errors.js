@@ -37,6 +37,14 @@ router.post('/report', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'errorMessage wajib' });
     }
 
+    // Batasi panjang field untuk cegah abuse / DB bloat.
+    const safeErrorMessage = String(errorMessage).slice(0, 2000);
+    const safeStackTrace = stackTrace ? String(stackTrace).slice(0, 8000) : null;
+    const safeScreen = screen ? String(screen).slice(0, 100) : null;
+    const safeAction = action ? String(action).slice(0, 100) : null;
+    const validSeverity = ['low', 'medium', 'high', 'critical'].includes(severity)
+      ? severity : 'medium';
+
     // Ekstrak user_id dari token jika ada (opsional)
     let userId = null;
     const authHeader = req.headers.authorization;
@@ -50,8 +58,8 @@ router.post('/report', async (req, res, next) => {
 
     // Buat fingerprint: hash dari errorMessage + top stack frame + screen + action
     // Agar error yang sama (pattern) di-group jadi satu.
-    const topFrame = (stackTrace || '').split('\n').slice(0, 3).join('|');
-    const raw = `${errorMessage}||${topFrame}||${screen || ''}||${action || ''}`;
+    const topFrame = (safeStackTrace || '').split('\n').slice(0, 3).join('|');
+    const raw = `${safeErrorMessage}||${topFrame}||${safeScreen || ''}||${safeAction || ''}`;
     const fingerprint = crypto.createHash('sha256').update(raw).digest('hex').slice(0, 64);
 
     // Cek apakah pattern sudah ada
@@ -82,7 +90,7 @@ router.post('/report', async (req, res, next) => {
 
       await pool.query(
         'UPDATE error_patterns SET occurrence_count = ?, affected_users = ?, last_seen_at = NOW(), severity = GREATEST(severity, ?) WHERE id = ?',
-        [prevCount + 1, newAffected, severity || 'medium', patternId]
+        [prevCount + 1, newAffected, validSeverity, patternId]
       );
 
       // Simpan occurrence detail hanya jika < 5 per pattern (hemat storage)
@@ -109,7 +117,7 @@ router.post('/report', async (req, res, next) => {
       patternId = uuidv4();
       await pool.query(
         'INSERT INTO error_patterns (id, fingerprint, error_message, stack_trace, screen, action, severity) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [patternId, fingerprint, errorMessage, stackTrace || null, screen || null, action || null, severity || 'medium']
+        [patternId, fingerprint, safeErrorMessage, safeStackTrace, safeScreen, safeAction, validSeverity]
       );
 
       // Simpan occurrence pertama

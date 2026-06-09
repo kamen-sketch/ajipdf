@@ -133,9 +133,32 @@ router.put('/users/:id', async (req, res, next) => {
     const updates = [];
     const params = [];
 
-    if (displayName !== undefined) { updates.push('display_name = ?'); params.push(displayName); }
-    if (role !== undefined) { updates.push('role = ?'); params.push(role); }
-    if (isActive !== undefined) { updates.push('is_active = ?'); params.push(isActive); }
+    // Cegah admin mengubah role/status dirinya sendiri (anti self-lockout).
+    if (req.params.id === req.user.id && (role !== undefined || isActive !== undefined)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tidak bisa mengubah role atau status akun sendiri',
+      });
+    }
+
+    if (displayName !== undefined) {
+      if (typeof displayName !== 'string' || displayName.trim().length < 2) {
+        return res.status(400).json({ success: false, message: 'Nama tidak valid' });
+      }
+      updates.push('display_name = ?');
+      params.push(displayName.trim());
+    }
+    if (role !== undefined) {
+      if (!['user', 'admin'].includes(role)) {
+        return res.status(400).json({ success: false, message: 'Role tidak valid' });
+      }
+      updates.push('role = ?');
+      params.push(role);
+    }
+    if (isActive !== undefined) {
+      updates.push('is_active = ?');
+      params.push(isActive ? 1 : 0);
+    }
 
     if (updates.length === 0) {
       return res.status(400).json({ success: false, message: 'Tidak ada field untuk diupdate' });
@@ -174,6 +197,12 @@ router.post('/users', async (req, res, next) => {
     const { email, password, displayName, role } = req.body;
     if (!email || !password || !displayName) {
       return res.status(400).json({ success: false, message: 'email, password, displayName wajib' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password minimal 6 karakter' });
+    }
+    if (role !== undefined && !['user', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Role tidak valid' });
     }
 
     const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);

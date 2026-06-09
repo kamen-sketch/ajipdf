@@ -14,12 +14,12 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   bool _isYearly = true;
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isPro = ref.watch(isProProvider);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Upgrade to Pro'),
@@ -33,7 +33,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [
                     AppTheme.primaryColor,
                     AppTheme.secondaryColor,
@@ -90,7 +90,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            
+
             // Pricing toggle
             Container(
               padding: const EdgeInsets.all(4),
@@ -107,7 +107,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: !_isYearly ? AppTheme.primaryColor : Colors.transparent,
+                          color: !_isYearly
+                              ? AppTheme.primaryColor
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -127,7 +129,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: _isYearly ? AppTheme.primaryColor : Colors.transparent,
+                          color: _isYearly
+                              ? AppTheme.primaryColor
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -151,7 +155,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(
+                                child: const Text(
                                   '-17%',
                                   style: TextStyle(
                                     color: AppTheme.primaryColor,
@@ -170,7 +174,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Price display
             Center(
               child: RichText(
@@ -202,7 +206,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 ),
               ),
             const SizedBox(height: 32),
-            
+
             // Features list
             _buildFeatureItem(
               icon: Icons.all_inclusive,
@@ -245,7 +249,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               subtitle: 'No interruptions while you work',
             ),
             const SizedBox(height: 32),
-            
+
             // Subscribe button
             SizedBox(
               height: 56,
@@ -253,11 +257,22 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 onPressed: isPro
                     ? null
                     : () {
-                        ref.read(subscriptionProvider.notifier).upgradeToPro();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Selamat! Akun kamu sekarang Pro. Semua fitur terbuka.'),
-                            backgroundColor: AppTheme.successColor,
+                        // Pembayaran belum dikonfigurasi — JANGAN beri Pro gratis.
+                        // Aktivasi Pro hanya via verifikasi pembayaran di backend
+                        // atau aktivasi manual oleh admin.
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Pembayaran Segera Hadir'),
+                            content: const Text(
+                                'Integrasi pembayaran (in-app purchase) sedang '
+                                'disiapkan. Untuk aktivasi Pro saat ini, hubungi admin.'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('OK'),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -265,21 +280,22 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Restore purchases
             Center(
               child: TextButton(
                 onPressed: () {
-                  ref.read(subscriptionProvider.notifier).upgradeToPro();
+                  // Restore harus memverifikasi pembelian ke payment provider.
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Pembelian dipulihkan.')),
+                    const SnackBar(
+                        content: Text('Tidak ada pembelian untuk dipulihkan.')),
                   );
                 },
                 child: const Text('Restore Purchases'),
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Terms
             Text(
               'Subscriptions auto-renew unless cancelled. Cancel anytime in your account settings.',
@@ -293,7 +309,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       ),
     );
   }
-  
+
   Widget _buildFeatureItem({
     required IconData icon,
     required String title,
@@ -322,7 +338,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 ),
                 Text(
                   subtitle,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppTheme.textSecondary,
                     fontSize: 12,
                   ),

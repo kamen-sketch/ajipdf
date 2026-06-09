@@ -94,6 +94,32 @@ router.post('/upload', authenticate, upload.single('file'), async (req, res, nex
   }
 });
 
+// GET /api/documents/:id/download — secure download (owner only)
+router.get('/:id/download', authenticate, async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT name, file_path FROM documents WHERE id = ? AND user_id = ? AND is_deleted = FALSE',
+      [req.params.id, req.user.id]
+    );
+    if (rows.length === 0 || !rows[0].file_path) {
+      return res.status(404).json({ success: false, message: 'Dokumen tidak ditemukan' });
+    }
+
+    // Cegah path traversal: pastikan file ada di dalam uploadDir
+    const resolved = path.resolve(uploadDir, rows[0].file_path);
+    if (!resolved.startsWith(path.resolve(uploadDir))) {
+      return res.status(403).json({ success: false, message: 'Akses ditolak' });
+    }
+    if (!fs.existsSync(resolved)) {
+      return res.status(404).json({ success: false, message: 'File tidak ada di server' });
+    }
+
+    res.download(resolved, rows[0].name);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/documents/:id — get document detail
 router.get('/:id', authenticate, async (req, res, next) => {
   try {
@@ -129,12 +155,34 @@ router.delete('/:id', authenticate, async (req, res, next) => {
 // POST /api/documents/log-operation — log an operation
 router.post('/log-operation', authenticate, async (req, res, next) => {
   try {
-    const { type, documentId, inputSize, outputSize, metadata } = req.body;
-    const id = uuidv4();
+    let { type, documentId, inputSize, outputSize, metadata } = req.body;
 
+    // Whitelist tipe operasi yang valid (sesuai ENUM di DB).
+    const validTypes = ['split', 'merge', 'compress', 'encrypt', 'watermark',
+      'sign', 'ocr', 'scan', 'rotate', 'annotate'];
+    // Map legacy 'split_merge' → 'split'
+    if (type === 'split_merge') type = 'split';
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ success: false, message: 'Tipe operasi tidak valid' });
+    }
+
+    // Validasi ukuran (cegah angka negatif/aneh)
+    inputSize = Math.max(0, parseInt(inputSize) || 0);
+    outputSize = Math.max(0, parseInt(outputSize) || 0);
+
+    // Jika documentId diberikan, pastikan milik user ini (cegah IDOR).
+    if (documentId) {
+      const [doc] = await pool.query(
+        'SELECT id FROM documents WHERE id = ? AND user_id = ?',
+        [documentId, req.user.id]
+      );
+      if (doc.length === 0) documentId = null;
+    }
+
+    const id = uuidv4();
     await pool.query(
       'INSERT INTO operations (id, user_id, document_id, type, input_size, output_size, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, req.user.id, documentId || null, type, inputSize || 0, outputSize || 0, JSON.stringify(metadata || {})]
+      [id, req.user.id, documentId || null, type, inputSize, outputSize, JSON.stringify(metadata || {})]
     );
 
     // Update usage tracking

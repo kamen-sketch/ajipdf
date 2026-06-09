@@ -209,60 +209,53 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final email = account.email;
       final displayName = account.displayName ?? email.split('@').first;
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
 
-      // Try login first, if user doesn't exist — register.
-      try {
-        final loginRes = await ApiService.instance.post(
-          '/auth/login',
-          data: {'email': email, 'password': 'google_oauth_$email'},
-        );
-        final body = loginRes.data as Map<String, dynamic>;
-        final payload = body['data'] as Map<String, dynamic>? ?? body;
-        final jwt = payload['token'] as String;
-        await ApiService.instance.setToken(jwt);
+      // Panggil endpoint khusus Google — backend yang handle register/login
+      // dengan password rahasia server-side (tidak bisa ditebak client).
+      final res = await ApiService.instance.post(
+        '/auth/google',
+        data: {
+          'email': email,
+          'displayName': displayName,
+          'idToken': idToken,
+        },
+      );
+      final body = res.data as Map<String, dynamic>;
+      final payload = body['data'] as Map<String, dynamic>? ?? body;
+      final jwt = payload['token'] as String;
+      await ApiService.instance.setToken(jwt);
 
-        final user = payload['user'] as Map<String, dynamic>? ?? payload;
-        state = AuthState(
-          userId: user['id']?.toString(),
-          email: user['email'] as String? ?? email,
-          displayName: user['displayName'] as String? ?? displayName,
-          token: jwt,
-          role: user['role'] as String?,
-          isLoading: false,
-        );
-        _controller.add(state);
-        ErrorReporter.instance.addBreadcrumb('Auth', 'google_login_success');
-        return true;
-      } catch (_) {
-        // Login failed — try register
-        final regRes = await ApiService.instance.post(
-          '/auth/register',
-          data: {
-            'email': email,
-            'password': 'google_oauth_$email',
-            'displayName': displayName,
-          },
-        );
-        final body = regRes.data as Map<String, dynamic>;
-        final payload = body['data'] as Map<String, dynamic>? ?? body;
-        final jwt = payload['token'] as String;
-        await ApiService.instance.setToken(jwt);
-
-        final user = payload['user'] as Map<String, dynamic>? ?? payload;
-        state = AuthState(
-          userId: user['id']?.toString(),
-          email: user['email'] as String? ?? email,
-          displayName: user['displayName'] as String? ?? displayName,
-          token: jwt,
-          role: user['role'] as String?,
-          isLoading: false,
-        );
-        _controller.add(state);
-        ErrorReporter.instance.addBreadcrumb('Auth', 'google_register_success');
-        return true;
-      }
+      final user = payload['user'] as Map<String, dynamic>? ?? payload;
+      state = AuthState(
+        userId: user['id']?.toString(),
+        email: user['email'] as String? ?? email,
+        displayName: user['displayName'] as String? ?? displayName,
+        token: jwt,
+        role: user['role'] as String?,
+        isLoading: false,
+      );
+      _controller.add(state);
+      ErrorReporter.instance.addBreadcrumb('Auth', 'google_login_success');
+      return true;
     } catch (e, st) {
-      final message = _extractErrorMessage(e) ?? 'Google Sign-In gagal';
+      String message;
+      final errStr = e.toString().toLowerCase();
+      if (errStr.contains('popup_closed') ||
+          errStr.contains('cancelled') ||
+          errStr.contains('canceled')) {
+        // User closed popup — not an error
+        state = state.copyWith(isLoading: false);
+        _controller.add(state);
+        return false;
+      } else if (errStr.contains('invalid_client') ||
+          errStr.contains('no registered origin')) {
+        message =
+            'Google OAuth belum dikonfigurasi.\nTambahkan localhost di Google Cloud Console → Credentials.';
+      } else {
+        message = _extractErrorMessage(e) ?? 'Google Sign-In gagal: $e';
+      }
       state = state.copyWith(isLoading: false, error: message);
       _controller.add(state);
       ErrorReporter.instance

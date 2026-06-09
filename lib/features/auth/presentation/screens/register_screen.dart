@@ -68,6 +68,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     if (success && mounted) context.go('/dashboard');
   }
 
+  Future<void> _handleGoogleRegister() async {
+    final success =
+        await ref.read(authStateProvider.notifier).loginWithGoogle();
+    if (success && mounted) context.go('/dashboard');
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
@@ -322,6 +328,57 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600)),
+                              ),
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            // Divider
+                            Row(
+                              children: [
+                                Expanded(
+                                    child: Divider(
+                                        color: Colors.grey.shade200,
+                                        thickness: 1)),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  child: Text('atau',
+                                      style: TextStyle(
+                                          color: Colors.grey.shade500,
+                                          fontSize: 12)),
+                                ),
+                                Expanded(
+                                    child: Divider(
+                                        color: Colors.grey.shade200,
+                                        thickness: 1)),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Google Sign-Up
+                            SizedBox(
+                              height: 48,
+                              child: OutlinedButton.icon(
+                                onPressed: authState.isLoading
+                                    ? null
+                                    : _handleGoogleRegister,
+                                icon: const Text('G',
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF4285F4))),
+                                label: const Text('Daftar dengan Google',
+                                    style: TextStyle(
+                                        color: Color(0xFF374151),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500)),
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(
+                                      color: Colors.grey.shade300, width: 1),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
                               ),
                             ),
                           ],
