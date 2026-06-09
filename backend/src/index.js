@@ -11,6 +11,7 @@ const documentRoutes = require('./routes/documents');
 const subscriptionRoutes = require('./routes/subscriptions');
 const adminRoutes = require('./routes/admin');
 const errorRoutes = require('./routes/errors');
+const configRoutes = require('./routes/config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -77,6 +78,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/errors', errorLimiter, errorRoutes);
+app.use('/api/config', configRoutes);
 
 // Secure file download — hanya pemilik atau admin (lihat documents route)
 // File TIDAK lagi di-serve statis tanpa auth.

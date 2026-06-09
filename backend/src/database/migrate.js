@@ -153,6 +153,26 @@ async function migrate() {
     )
   `);
 
+  // App configuration (pricing, features, promo — settable by admin)
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS app_config (
+      config_key VARCHAR(100) PRIMARY KEY,
+      config_value JSON NOT NULL,
+      description VARCHAR(255) NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Insert default config if not exists
+  await conn.query(`
+    INSERT IGNORE INTO app_config (config_key, config_value, description) VALUES
+      ('pricing', '{"monthly_price":49900,"yearly_price":499000,"currency":"IDR","monthly_label":"Rp 49.900/bulan","yearly_label":"Rp 499.000/tahun (hemat 17%)"}', 'Harga subscription'),
+      ('promo', '{"enabled":false,"title":"","message":"","discount_percent":0,"expires_at":null}', 'Popup promo untuk user'),
+      ('free_limits', '{"split_merge_monthly":10,"max_annotations":50,"max_file_size_mb":20}', 'Batasan tier Free'),
+      ('pro_features', '{"split":true,"merge":true,"sign":true,"compress":true,"watermark":true,"encrypt":true,"ocr":true,"annotations":true,"cloud_sync":false,"ad_free":true}', 'Fitur yang termasuk Pro'),
+      ('revenuecat', '{"api_key":"test_xMHqrBFSMWGfhDIjNgVYzjkRDyj","entitlement_id":"pro","product_monthly":"ajipdf_pro_monthly","product_yearly":"ajipdf_pro_yearly"}', 'RevenueCat configuration')
+  `);
+
   console.log('✅ Migration completed successfully!');
   await conn.end();
 }
